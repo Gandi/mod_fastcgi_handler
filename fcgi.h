@@ -11,12 +11,6 @@
 #define ASSERT(a) ((void) 0)
 #endif
 
-#ifdef WIN32
-/* warning C4115: named type definition in parentheses */
-#pragma warning(disable : 4115)
-/* warning C4514: unreferenced inline function has been removed */
-#pragma warning(disable:4514)
-#endif
 
 /* Apache header files */
 #include "httpd.h"
@@ -34,11 +28,6 @@
 #include "ap_compat.h"
 #include "apr_strings.h"
 
-#ifdef WIN32
-#if MODULE_MAGIC_NUMBER < 20020903
-#error "mod_fastcgi is incompatible with Apache versions older than 2.0.41 under WIN"
-#endif
-#endif
 
 typedef struct apr_array_header_t array_header;
 typedef struct apr_table_t table;
@@ -97,7 +86,7 @@ typedef apr_status_t apcb_t;
 
 #endif /* defined(ap_copy_table) */
 
-#if (defined(HAVE_WRITEV) && !HAVE_WRITEV && !defined(NO_WRITEV)) || defined WIN32
+#if (defined(HAVE_WRITEV) && !HAVE_WRITEV && !defined(NO_WRITEV))
 #define NO_WRITEV
 #endif
 
@@ -106,11 +95,7 @@ typedef apr_status_t apcb_t;
 #include <sys/uio.h>
 #endif
 
-#ifdef WIN32
-#pragma warning(default : 4115)
-#else
 #include <sys/un.h>
-#endif
 
 /* FastCGI header files */
 #include "mod_fastcgi.h"
@@ -125,24 +110,6 @@ typedef struct {
     char data[1];           /* buffer data */
 } Buffer;
 
-#ifdef WIN32
-#define READER 0
-#define WRITER 1
-
-#define MBOX_EVENT 0   /* mboc is ready to be read */
-#define TERM_EVENT 1   /* termination event */
-#define WAKE_EVENT 2   /* notification of child Fserver dieing */
-
-typedef struct _fcgi_pm_job {
-    char id;
-    char *fs_path;
-    char *user;
-    char * group;
-    unsigned long qsec;
-    unsigned long start_time;
-    struct _fcgi_pm_job *next;
-} fcgi_pm_job;
-#endif
 
 enum process_state { 
     FCGI_RUNNING_STATE,             /* currently running */
@@ -157,10 +124,6 @@ enum process_state {
  * a class.  It is embedded in fcgi_server below.
  */
 typedef struct _FcgiProcessInfo {
-#ifdef WIN32
-    HANDLE handle;                   /* process handle */
-    HANDLE terminationEvent;         /* Event used to signal process termination */
-#endif
     pid_t pid;                       /* pid of associated process */
     enum process_state state;        /* state of the process */
     time_t start_time;               /* time the process was started */
@@ -197,11 +160,6 @@ typedef struct _FastCgiServerInfo {
     u_int numFailures;              /* num restarts due to exit failure */
     int bad;                        /* is [not] having start problems */
     struct sockaddr *socket_addr;   /* Socket Address of FCGI app server class */
-#ifdef WIN32
-    struct sockaddr *dest_addr;     /* for local apps on NT need socket address */
-                                    /* bound to localhost */
-    const char *mutex_env_string;   /* string holding the accept mutex handle */
-#endif
     int socket_addr_len;            /* Length of socket */
     enum {APP_CLASS_UNKNOWN,
           APP_CLASS_STANDARD,
@@ -249,11 +207,7 @@ typedef struct _FastCgiServerInfo {
  * fcgi_request holds the state of a particular FastCGI request.
  */
 typedef struct {
-#ifdef WIN32
-    SOCKET fd;
-#else
     int fd;                         /* connection to FastCGI server */
-#endif
     int gotHeader;                  /* TRUE if reading content bytes */
     unsigned char packetType;       /* type of packet */
     int dataLen;                    /* length of data bytes */
@@ -288,9 +242,6 @@ typedef struct {
     int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
     const char *user;               /* user used to invoke app (suexec) */
     const char *group;              /* group used to invoke app (suexec) */
-#ifdef WIN32
-    BOOL using_npipe_io;             /* named pipe io */
-#endif
     int nph;
 } fcgi_request;
 
@@ -330,16 +281,6 @@ typedef struct
 #define FCGI_FAILED 1
 
 
-#ifdef WIN32
-#define FCGI_LOG_EMERG          __FILE__,__LINE__,APLOG_EMERG,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_ALERT          __FILE__,__LINE__,APLOG_ALERT,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_CRIT           __FILE__,__LINE__,APLOG_CRIT,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_ERR            __FILE__,__LINE__,APLOG_ERR,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_WARN           __FILE__,__LINE__,APLOG_WARNING,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_NOTICE         __FILE__,__LINE__,APLOG_NOTICE,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_INFO           __FILE__,__LINE__,APLOG_INFO,APR_FROM_OS_ERROR(GetLastError())
-#define FCGI_LOG_DEBUG          __FILE__,__LINE__,APLOG_DEBUG,APR_FROM_OS_ERROR(GetLastError())
-#else /* !WIN32 */
 #define FCGI_LOG_EMERG          __FILE__,__LINE__,APLOG_EMERG,APR_FROM_OS_ERROR(errno)
 #define FCGI_LOG_ALERT          __FILE__,__LINE__,APLOG_ALERT,APR_FROM_OS_ERROR(errno)
 #define FCGI_LOG_CRIT           __FILE__,__LINE__,APLOG_CRIT,APR_FROM_OS_ERROR(errno)
@@ -348,7 +289,6 @@ typedef struct
 #define FCGI_LOG_NOTICE         __FILE__,__LINE__,APLOG_NOTICE,APR_FROM_OS_ERROR(errno)
 #define FCGI_LOG_INFO           __FILE__,__LINE__,APLOG_INFO,APR_FROM_OS_ERROR(errno)
 #define FCGI_LOG_DEBUG          __FILE__,__LINE__,APLOG_DEBUG,APR_FROM_OS_ERROR(errno)
-#endif
 
 #define FCGI_LOG_EMERG_ERRNO    __FILE__,__LINE__,APLOG_EMERG,APR_FROM_OS_ERROR(errno)
 #define FCGI_LOG_ALERT_ERRNO    __FILE__,__LINE__,APLOG_ALERT,APR_FROM_OS_ERROR(errno)
@@ -421,11 +361,7 @@ const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, ch
 /*
  * fcgi_pm.c
  */
-#ifdef WIN32
-void fcgi_pm_main(void *dummy);
-#else
 int fcgi_pm_main(void *dummy, child_info *info);
-#endif
 
 /*
  * fcgi_protocol.c
@@ -444,9 +380,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr);
 void fcgi_buf_reset(Buffer *bufPtr);
 Buffer *fcgi_buf_new(pool *p, int size);
 
-#ifndef WIN32
 typedef int SOCKET;
-#endif
 
 int fcgi_buf_socket_recv(Buffer *b, SOCKET socket);
 int fcgi_buf_socket_send(Buffer *b, SOCKET socket);
@@ -471,10 +405,8 @@ char *fcgi_util_socket_hash_filename(pool *p, const char *path,
     const char *user, const char *group);
 const char *fcgi_util_socket_make_path_absolute(pool * const p,
     const char *const file, const int dynamic);
-#ifndef WIN32
 const char *fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
     int *socket_addr_len, const char *socket_path);
-#endif
 const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
     int *socket_addr_len, const char *host, unsigned short port);
 const char *fcgi_util_check_access(pool *tp,
@@ -490,9 +422,6 @@ ServerProcess *fcgi_util_fs_create_procs(pool *p, int num);
 
 int fcgi_util_ticks(struct timeval *);
 
-#ifdef WIN32
-int fcgi_pm_add_job(fcgi_pm_job *new_job);
-#endif
 
 uid_t fcgi_util_get_server_uid(const server_rec * const s);
 gid_t fcgi_util_get_server_gid(const server_rec * const s);
@@ -524,11 +453,6 @@ extern int fcgi_dynamic_total_proc_count;
 extern time_t fcgi_dynamic_epoch;
 extern time_t fcgi_dynamic_last_analyzed;
 
-#ifdef WIN32
-extern HANDLE *fcgi_dynamic_mbox_mutex;
-extern HANDLE fcgi_event_handles[3];
-extern fcgi_pm_job *fcgi_dynamic_mbox;
-#endif
 
 extern u_int dynamicMaxProcs;
 extern int dynamicMinProcs;

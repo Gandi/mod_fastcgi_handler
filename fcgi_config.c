@@ -9,19 +9,10 @@
 #include <limits.h>
 #include "mpm_common.h"     /* ap_uname2id, ap_gname2id */
 
-#ifdef WIN32
-#include <direct.h>
-#else
 #include <unistd.h>
 #include "unixd.h"
-#endif
 
 
-#ifdef WIN32
-/* warning C4100: unreferenced formal parameter */
-/* warning C4706: assignment within conditional expression */ 
-#pragma warning( disable : 4100 4706 )
-#endif
 
 /*******************************************************************************
  * Get the next configuration directive argument, & return an in_addr and port.
@@ -133,7 +124,6 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
 {
     static int isSet = 0;
 
-#ifndef WIN32
 
     uid_t uid = geteuid();
     gid_t gid = getegid();
@@ -161,7 +151,6 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
     fcgi_user_id = uid;
     fcgi_group_id = gid;
 
-#endif /* !WIN32 */
 
     return NULL;
 }
@@ -200,7 +189,6 @@ apcb_t fcgi_config_reset_globals(void* dummy)
     dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 	dynamicFlush = FCGI_FLUSH;
 
-#ifndef WIN32
 	/* Close any old pipe (HUP/USR1) */
 	if (fcgi_pm_pipe[0] != -1) {
 		close(fcgi_pm_pipe[0]);
@@ -210,7 +198,6 @@ apcb_t fcgi_config_reset_globals(void* dummy)
 		close(fcgi_pm_pipe[1]);
 		fcgi_pm_pipe[1] = -1;
 	}
-#endif
 
     return APCB_OK;
 }
@@ -237,25 +224,19 @@ const char *fcgi_config_make_dir(pool *tp, char *path)
     /* Does it exist? */
     if (stat(path, &finfo) != 0) {
         /* No, but maybe we can create it */
-#ifdef WIN32
-        if (mkdir(path) != 0) 
-#else
         if (mkdir(path, S_IRWXU) != 0)
-#endif
         {
             return ap_psprintf(tp,
                 "doesn't exist and can't be created: %s",
                 strerror(errno));
         }
 
-#ifndef WIN32
         /* If we're root, we're gonna setuid/setgid so we need to chown */
         if (geteuid() == 0 && chown(path, ap_user_id, ap_group_id) != 0) {
             return ap_psprintf(tp,
                 "can't chown() to the server (uid %ld, gid %ld): %s",
                 (long)ap_user_id, (long)ap_group_id, strerror(errno));
         }
-#endif
     }
     else {
         /* Yes, is it a directory? */
@@ -263,12 +244,8 @@ const char *fcgi_config_make_dir(pool *tp, char *path)
             return "isn't a directory!";
 
         /* Can we RWX in there? */
-#ifdef WIN32
-        err = fcgi_util_check_access(tp, NULL, &finfo, _S_IREAD | _S_IWRITE | _S_IEXEC, fcgi_user_id, fcgi_group_id);
-#else
         err = fcgi_util_check_access(tp, NULL, &finfo, R_OK | W_OK | X_OK,
                           fcgi_user_id, fcgi_group_id);
-#endif
         if (err != NULL) {
             return ap_psprintf(tp,
                 "access for server (uid %ld, gid %ld) failed: %s",
@@ -312,19 +289,12 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
     arg_nc = ap_pstrdup(cmd->pool, arg);
 
-#ifndef WIN32
 
     if (apr_filepath_merge(&arg_nc, "", arg, 0, cmd->pool))
         return ap_psprintf(tp, "%s %s: invalid filepath", name, arg);
 
     arg_nc = ap_server_root_relative(cmd->pool, arg_nc);
 
-#else /* WIN32 */
-
-	if (strncmp(arg_nc, "\\\\.\\pipe\\", 9) != 0)
-		return ap_psprintf(tp, "%s %s is invalid format",name, arg_nc);
-
-#endif
 
     fcgi_socket_dir = arg_nc;
 
@@ -341,10 +311,6 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
  */
 const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg)
 {
-#ifdef WIN32
-    return ap_psprintf(cmd->temp_pool, 
-        "the %s directive is not supported on WIN", cmd->cmd->name);
-#else
 
     const char *err = NULL;
     const char * const name = cmd->cmd->name;
@@ -400,7 +366,6 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
     fcgi_wrapper = wrapper;
 
     return NULL;
-#endif /* !WIN32 */
 }
 
 /*******************************************************************************
@@ -483,24 +448,14 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
             s->flush = 1;
         }
         else if (strcasecmp(option, "-user") == 0) {
-#ifdef WIN32
-            return ap_psprintf(tp, 
-                "%s %s: the -user option isn't supported on WIN", name, fs_path);
-#else
             s->user = ap_getword_conf(tp, &arg);
             if (*s->user == '\0')
                 return invalid_value(tp, name, fs_path, option, "\"\"");
-#endif
         }
         else if (strcasecmp(option, "-group") == 0) {
-#ifdef WIN32
-            return ap_psprintf(tp, 
-                "%s %s: the -group option isn't supported on WIN", name, fs_path);
-#else
             s->group = ap_getword_conf(tp, &arg);
             if (*s->group == '\0')
                 return invalid_value(tp, name, fs_path, option, "\"\"");
-#endif
         }
         else {
             return ap_psprintf(tp, "%s %s: invalid option: %s", name, fs_path, option);
@@ -508,7 +463,6 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     } /* while */
 
 
-#ifndef WIN32
     if (fcgi_wrapper)
     {
         if (s->group == NULL)
@@ -535,7 +489,6 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
         return ap_psprintf(tp,
             "%s %s: invalid user or group: %s", name, fs_path, err);
     }
-#endif /* !WIN32 */
 
     /* Require one of -socket or -host, but not both */
     if (s->socket_path != NULL && s->port != 0) {
@@ -558,20 +511,14 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 
         if (fcgi_socket_dir == NULL)
         {
-#ifdef WIN32
-            fcgi_socket_dir = DEFAULT_SOCK_DIR;
-#else
             fcgi_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
-#endif
         }
 
         s->socket_path = fcgi_util_socket_make_path_absolute(p, s->socket_path, 0);
-#ifndef WIN32
         err = fcgi_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
                                   &s->socket_addr_len, s->socket_path);
         if (err != NULL)
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
-#endif
     }
 
     /* Add it to the list of FastCGI servers */

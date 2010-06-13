@@ -6,9 +6,6 @@
 #include "fcgi_protocol.h"
 #include "apr_lib.h"
 
-#ifdef WIN32
-#pragma warning( disable : 4706)
-#endif
 
  /*******************************************************************************
  * Build and queue a FastCGI message header.  It is the caller's

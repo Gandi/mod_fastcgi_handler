@@ -15,27 +15,6 @@
 #define FCGI_DEFAULT_IDLE_TIMEOUT 30
 
 /*
- * (WIN32) # of sec to wait while trying to connect using a named pipe.
- * This is overridden by -appConnTimeout, if set.  This value is similiar
- * to the OS specific (blocking) connect() timeout.  According to XXX
- * this is typically XXX sec.
- */
-#define FCGI_NAMED_PIPE_CONNECT_TIMEOUT  90
-
-/* 
- * [WIN32] The number of millisecs to wait after having signaled the 
- * termination event to its applications before issuing a TerminateProcess().
- * If all of the applications are based on a version of the FastCGI 
- * application library that properly handles the shutdown event
- * (fcgi2 v2.2.4), this can be set to <= 0 to prevent the use of
- * TerminateProcess() entirely.  If non of the applications support the
- * termination event, this value can be set to 1.  It is highly reccomended
- * that the termination event be supported, as TerminateProcess() is a 
- * brutal way of taking down an application.
- */
-#define WIN32_SHUTDOWN_GRACEFUL_WAIT  1000
-
-/*
  * The number of failed starts that can occur before the application is
  * considered broken and start attempts fall back to FAILED_STARTS_DELAY.
  */
@@ -121,19 +100,10 @@
  */
 #define FCGI_FLUSH	FALSE
 
-#ifdef WIN32
-
-/* # of millisecs to wait on the mbox mutex */
-#define FCGI_MBOX_MUTEX_TIMEOUT 5000
-
-#define DEFAULT_SOCK_DIR "\\\\.\\pipe\\FastCGI\\"
-
-#else /* !WIN32 */
 
 /* Default dir for Unix/Domain sockets */
 #define DEFAULT_SOCK_DIR  DEFAULT_REL_RUNTIMEDIR "/fastcgi"
 
-#endif
 
 #define FCGI_MAGIC_TYPE "application/x-httpd-fcgi"
 

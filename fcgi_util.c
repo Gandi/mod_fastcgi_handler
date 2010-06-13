@@ -4,9 +4,6 @@
 
 #include "fcgi.h"
 
-#ifdef WIN32
-#pragma warning( disable : 4100 )
-#else
 #include <netdb.h>
 #include <unistd.h>
 #include <grp.h>
@@ -17,28 +14,19 @@
 #endif
 
 #include "unixd.h"
-#endif
 
 uid_t 
 fcgi_util_get_server_uid(const server_rec * const s)
 {
-#if defined(WIN32) 
-    return (uid_t) 0;
-#else
     /* the main server's uid */
     return ap_user_id;
-#endif
 }
 
 uid_t 
 fcgi_util_get_server_gid(const server_rec * const s)
 {
-#if defined(WIN32) 
-    return (uid_t) 0;
-#else
     /* the main server's gid */
     return ap_group_id;
-#endif
 }
  
 /*******************************************************************************
@@ -63,36 +51,7 @@ fcgi_util_socket_hash_filename(pool *p, const char *path,
   */
 static char * make_full_path(pool *a, const char *src1, const char *src2)
 {
-#ifdef WIN32
-    register int x;
-    char * p ;
-    char * q ;
-
-    x = strlen(src1);
-
-    if (x == 0) {
-	    p = ap_pstrcat(a, "\\", src2, NULL);
-    }
-    else if (src1[x - 1] != '\\' && src1[x - 1] != '/') {
-	    p = ap_pstrcat(a, src1, "\\", src2, NULL);
-    }
-    else {
-	    p = ap_pstrcat(a, src1, src2, NULL);
-    }
-
-    q = p ;
-    while (*q)
-	{
-        if (*q == '/') {
-	        *q = '\\' ;
-        }
-	    ++q;
-	}
-
-    return p ;
-#else
     return ap_make_full_path(a, src1, src2);
-#endif
 }
 
 /*******************************************************************************
@@ -114,7 +73,6 @@ fcgi_util_socket_make_path_absolute(pool * const p,
     }
 }
 
-#ifndef WIN32
 /*******************************************************************************
  * Build a Domain Socket Address structure, and calculate its size.
  * The error message is allocated from the pool p.  If you don't want the
@@ -142,7 +100,6 @@ fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
     *socket_addr_len = SUN_LEN(*socket_addr);
     return NULL;
 }
-#endif
 
 /*******************************************************************************
  * Convert a hostname or IP address string to an in_addr struct.
@@ -221,7 +178,6 @@ fcgi_util_check_access(pool *tp,
         statBuf = &myStatBuf;
     }
     
-#ifndef WIN32    
     /* If the uid owns the file, check the owner bits */
     if (uid == statBuf->st_uid) {
         if (mode & R_OK && !(statBuf->st_mode & S_IRUSR))
@@ -232,18 +188,8 @@ fcgi_util_check_access(pool *tp,
             return "execute not allowed by owner";
         return NULL;
     }
-#else
-    if (mode & _S_IREAD && !(statBuf->st_mode & _S_IREAD))
-        return "read not allowed";
-    if (mode & _S_IWRITE && !(statBuf->st_mode & _S_IWRITE))
-        return "write not allowed";
-    
-    /* I don't think this works on FAT, but since I don't know how to check..
-     * if (mode & _S_IEXEC && !(statBuf->st_mode & _S_IEXEC))
-     *     return "execute not allowed"; */
-#endif
 
-#if  !defined(__EMX__) && !defined(WIN32)
+#if  !defined(__EMX__)
     /* If the gid is same as the file's group, check the group bits */
     if (gid == statBuf->st_gid) {
         if (mode & R_OK && !(statBuf->st_mode & S_IRGRP))
@@ -371,11 +317,7 @@ fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat 
     /* Let the wrapper determine what it can and can't execute */
     if (! fcgi_wrapper)
     {
-#ifdef WIN32
-        err = fcgi_util_check_access(p, fs_path, finfo, _S_IEXEC, fcgi_user_id, fcgi_group_id);
-#else
         err = fcgi_util_check_access(p, fs_path, finfo, X_OK, fcgi_user_id, fcgi_group_id);
-#endif
         if (err) {
             return ap_psprintf(p,
                 "access for server (uid %ld, gid %ld) not allowed: %s",
@@ -408,11 +350,7 @@ fcgi_util_fs_new(pool *p)
     s->processPriority = FCGI_DEFAULT_PRIORITY;
     s->envp = &fcgi_empty_env;
     
-#ifdef WIN32
-    s->listenFd = (int) INVALID_HANDLE_VALUE;
-#else
     s->listenFd = -2;
-#endif
 
     return s;
 }
@@ -433,7 +371,6 @@ fcgi_util_fs_add(fcgi_server *s)
 const char *
 fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid)
 {
-#ifndef WIN32
 
     struct passwd *pw;
     struct group  *gr;
@@ -466,7 +403,6 @@ fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid)
     }
     s->group = ap_pstrdup(p, gr->gr_name);
 
-#endif /* !WIN32 */
 
     return NULL;
 }
@@ -481,10 +417,6 @@ fcgi_util_fs_create_procs(pool *p, int num)
     ServerProcess *proc = (ServerProcess *)ap_pcalloc(p, sizeof(ServerProcess) * num);
 
     for (i = 0; i < num; i++) {
-#ifdef WIN32
-        proc[i].handle = INVALID_HANDLE_VALUE;
-        proc[i].terminationEvent = INVALID_HANDLE_VALUE;
-#endif
         proc[i].pid = 0;
         proc[i].state = FCGI_READY_STATE;
     }
@@ -493,17 +425,7 @@ fcgi_util_fs_create_procs(pool *p, int num)
 
 int fcgi_util_ticks(struct timeval * tv) 
 {
-#ifdef WIN32
-    /* millisecs is sufficent granularity */
-    DWORD millis = GetTickCount();
-
-    tv->tv_sec = millis / 1000;
-    tv->tv_usec = (millis % 1000) * 1000;
-
-    return 0;
-#else
     return gettimeofday(tv, NULL);
-#endif
 }
 
 

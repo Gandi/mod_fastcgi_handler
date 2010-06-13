@@ -4,11 +4,7 @@
 
 #include "fcgi.h"
 
-#ifdef WIN32
-#pragma warning( disable : 4127 )
-#else
 #include <unistd.h>
-#endif
 
 /*******************************************************************************
  * Check buffer consistency with assertions.
@@ -80,31 +76,6 @@ void fcgi_buf_added(Buffer * const b, const unsigned int len)
     }
 }
 
-#ifdef WIN32
-
-static int socket_recv(SOCKET fd, char *buf, int len)
-{
-    int bytes_read = recv(fd, buf, len, 0);
-
-    if (bytes_read == SOCKET_ERROR) 
-    {
-        return -1;
-    }
-    return bytes_read;
-}
-
-static int socket_send(SOCKET fd, char * buf, int len)
-{
-    int bytes_sent = send(fd, buf, len, 0);
-
-    if (bytes_sent == SOCKET_ERROR) 
-    {
-        return -1;
-    }
-    return bytes_sent;
-}
-
-#else /* !WIN32 */
 
 static int socket_recv(int fd, char * buf, int len)
 {
@@ -149,7 +120,6 @@ static int socket_send(int fd, char * buf, int len)
     return bytes_sent;
 }
 
-#endif /* !WIN32 */
 
 /*******************************************************************************
  * Read from an open file descriptor into buffer.
