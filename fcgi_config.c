@@ -279,53 +279,6 @@ const char *fcgi_config_make_dir(pool *tp, char *path)
 }
 
 /*******************************************************************************
- * Create a "dynamic" subdirectory.  If the directory
- * already exists we don't mess with it unless 'wax' is set.
- */
-#ifndef WIN32
-const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
-{
-    const char *err;
-    pool *tp;
-
-    fcgi_dynamic_dir = ap_pstrcat(p, fcgi_socket_dir, "/dynamic", NULL);
-
-    if ((err = fcgi_config_make_dir(p, fcgi_dynamic_dir)))
-        return ap_psprintf(p, "can't create dynamic directory \"%s\": %s", fcgi_dynamic_dir, err);
-
-    /* Don't step on a running server unless its OK. */
-    if (!wax)
-        return NULL;
-
-    {
-        apr_dir_t * dir;
-        apr_finfo_t finfo;
-
-        if (apr_pool_create(&tp, p))
-            return "apr_pool_create() failed";
-
-        if (apr_dir_open(&dir, fcgi_dynamic_dir, tp))
-            return "apr_dir_open() failed";
-
-        /* delete the contents */
-
-        while (apr_dir_read(&finfo, APR_FINFO_NAME, dir) == APR_SUCCESS)
-        {
-            if (strcmp(finfo.name, ".") == 0 || strcmp(finfo.name, "..") == 0)
-                continue;
-
-            apr_file_remove(finfo.name, tp);
-        }
-    }
-
-
-    ap_destroy_pool(tp);
-
-    return NULL;
-}
-#endif
-
-/*******************************************************************************
  * Change the directory used for the Unix/Domain sockets from the default.
  * Create the directory and the "dynamic" subdirectory.
  */
@@ -375,21 +328,13 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
     fcgi_socket_dir = arg_nc;
 
-#ifdef WIN32
-    fcgi_dynamic_dir = ap_pstrcat(cmd->pool, fcgi_socket_dir, "dynamic", NULL);
-#else
     err = fcgi_config_make_dir(tp, fcgi_socket_dir);
     if (err != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, arg_nc, err);
 
-    err = fcgi_config_make_dynamic_dir(cmd->pool, 0);
-    if (err != NULL)
-        return ap_psprintf(tp, "%s %s: %s", name, arg_nc, err);
-#endif
-
     return NULL;
 }
-
+
 /*******************************************************************************
  * Enable, disable, or specify the path to a wrapper used to invoke all
  * FastCGI applications.

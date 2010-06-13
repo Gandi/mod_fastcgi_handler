@@ -518,9 +518,6 @@ extern int fcgi_pm_pipe[];
 
 extern pid_t fcgi_pm_pid;
 
-extern char *fcgi_dynamic_dir;            /* directory for the dynamic
-                                           * fastcgi apps' sockets */
-
 extern char *fcgi_empty_env;
 
 extern int fcgi_dynamic_total_proc_count;

@@ -109,7 +109,7 @@ fcgi_util_socket_make_path_absolute(pool * const p,
     }
     else
     {
-        const char * parent_dir = dynamic ? fcgi_dynamic_dir : fcgi_socket_dir;
+        const char * parent_dir = fcgi_socket_dir;
         return (const char *) make_full_path(p, parent_dir, file);
     }
 }

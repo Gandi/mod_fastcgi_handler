@@ -110,9 +110,6 @@ fcgi_server *fcgi_servers = NULL;         /* AppClasses */
 
 char *fcgi_socket_dir = NULL;             /* default FastCgiIpcDir */
 
-char *fcgi_dynamic_dir = NULL;            /* directory for the dynamic
-                                           * fastcgi apps' sockets */
-
 #ifdef WIN32
 
 #pragma warning( disable : 4706 4100 4127)
@@ -276,7 +273,6 @@ static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
 #ifdef WIN32
     if (fcgi_socket_dir == NULL)
         fcgi_socket_dir = DEFAULT_SOCK_DIR;
-    fcgi_dynamic_dir = ap_pstrcat(p, fcgi_socket_dir, "dynamic", NULL);
 #else
 
     if (fcgi_socket_dir == NULL)
@@ -284,10 +280,6 @@ static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
 
     /* Create Unix/Domain socket directory */
     if ((err = fcgi_config_make_dir(p, fcgi_socket_dir)))
-        ap_log_error(FCGI_LOG_ERR, s, "FastCGI: %s", err);
-
-    /* Create Dynamic directory */
-    if ((err = fcgi_config_make_dynamic_dir(p, 1)))
         ap_log_error(FCGI_LOG_ERR, s, "FastCGI: %s", err);
 
     /* Spawn the PM only once.  Under Unix, Apache calls init() routines
