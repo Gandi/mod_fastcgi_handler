@@ -335,7 +335,6 @@ typedef struct {
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_fcgi_uid_n_gid(int set);
 
-const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg);
 apcb_t fcgi_config_reset_globals(void * dummy);
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
 
@@ -391,7 +390,6 @@ fcgi_server *fcgi_util_fs_get(const char *ePath, const char *user, const char *g
 const char *fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat *finfo);
 fcgi_server *fcgi_util_fs_new(pool *p);
 void fcgi_util_fs_add(fcgi_server *s);
-const char *fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid);
 ServerProcess *fcgi_util_fs_create_procs(pool *p, int num);
 
 int fcgi_util_ticks(struct timeval *);
@@ -404,17 +402,12 @@ gid_t fcgi_util_get_server_gid(const server_rec * const s);
  * Globals
  */
 
-extern pool *fcgi_config_pool;
-
 extern server_rec *fcgi_apache_main_server;
 
-extern const char *fcgi_wrapper;                 /* wrapper path */
 extern uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
 extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
 
 extern fcgi_server *fcgi_servers;
-
-extern char *fcgi_socket_dir;             /* default FastCgiIpcDir */
 
 extern char *fcgi_empty_env;
 

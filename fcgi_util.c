@@ -243,7 +243,6 @@ fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
             continue;
         }
         if (path[i] == '\0' || path[i] == '/') {
-        if (fcgi_wrapper == NULL || (uid == s->uid && gid == s->gid))
             return s;
         }
     }
@@ -265,14 +264,7 @@ fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
     
     for (s = fcgi_servers; s != NULL; s = s->next) {
         if (strcmp(s->fs_path, path) == 0) {
-            if (fcgi_wrapper == NULL)
-                return s;
-
-            if (strcmp(user, s->user) == 0 
-                && (user[0] == '~' || strcmp(group, s->group) == 0))
-            {
-                return s;
-            }
+            return s;
         }
     }
     return NULL;
@@ -295,15 +287,11 @@ fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat 
     if (S_ISDIR(finfo->st_mode)) 
         return ap_psprintf(p, "script is a directory!");
     
-    /* Let the wrapper determine what it can and can't execute */
-    if (! fcgi_wrapper)
-    {
-        err = fcgi_util_check_access(p, fs_path, finfo, X_OK, fcgi_user_id, fcgi_group_id);
-        if (err) {
-            return ap_psprintf(p,
-                "access for server (uid %ld, gid %ld) not allowed: %s",
-                (long)fcgi_user_id, (long)fcgi_group_id, err);
-        }
+    err = fcgi_util_check_access(p, fs_path, finfo, X_OK, fcgi_user_id, fcgi_group_id);
+    if (err) {
+        return ap_psprintf(p,
+            "access for server (uid %ld, gid %ld) not allowed: %s",
+            (long)fcgi_user_id, (long)fcgi_group_id, err);
     }
     
     return NULL;
@@ -352,39 +340,6 @@ fcgi_util_fs_add(fcgi_server *s)
 const char *
 fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid)
 {
-
-    struct passwd *pw;
-    struct group  *gr;
-
-    if (fcgi_wrapper == NULL)
-        return NULL;
-
-    if (uid == 0 || gid == 0) {
-        return "invalid uid or gid, see the -user and -group options";
-    }
-
-    s->uid = uid;
-    pw = getpwuid(uid);
-    if (pw == NULL) {
-        return ap_psprintf(p,
-            "getpwuid() couldn't determine the username for uid '%ld', "
-            "you probably need to modify the User directive: %s",
-            (long)uid, strerror(errno));
-    }
-    s->user = ap_pstrdup(p, pw->pw_name);
-    s->username = s->user;
-
-    s->gid = gid;
-    gr = getgrgid(gid);
-    if (gr == NULL) {
-        return ap_psprintf(p,
-            "getgrgid() couldn't determine the group name for gid '%ld', "
-            "you probably need to modify the Group directive: %s",
-            (long)gid, strerror(errno));
-    }
-    s->group = ap_pstrdup(p, gr->gr_name);
-
-
     return NULL;
 }
 

@@ -157,78 +157,13 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
 
 apcb_t fcgi_config_reset_globals(void* dummy)
 {
-    fcgi_config_pool = NULL;
     fcgi_servers = NULL;
     fcgi_config_set_fcgi_uid_n_gid(0);
-    fcgi_wrapper = NULL;
     
     dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
 	dynamicFlush = FCGI_FLUSH;
 
     return APCB_OK;
-}
-
-/*******************************************************************************
- * Enable, disable, or specify the path to a wrapper used to invoke all
- * FastCGI applications.
- */
-const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg)
-{
-
-    const char *err = NULL;
-    const char * const name = cmd->cmd->name;
-    pool * const tp = cmd->temp_pool;
-    char * wrapper = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-    if (fcgi_wrapper)
-    {
-        return ap_psprintf(tp, "%s was already set to \"%s\"",
-                           name, fcgi_wrapper);
-    }
-
-    err = fcgi_config_set_fcgi_uid_n_gid(1);
-    if (err != NULL)
-        return ap_psprintf(tp, "%s %s: %s", name, arg, err);
-
-    if (fcgi_servers != NULL) {
-        return ap_psprintf(tp,
-            "The %s command must preceed static FastCGI server definitions", name);
-    }
-
-    if (strcasecmp(arg, "Off") == 0) {
-        fcgi_wrapper = NULL;
-        return NULL;
-    }
-
-    if (strcasecmp(arg, "On") == 0) 
-    {
-        wrapper = SUEXEC_BIN;
-    }
-    else
-    {
-        if (apr_filepath_merge(&wrapper, "", arg, 0, cmd->pool))
-            return ap_psprintf(tp, "%s %s: invalid filepath", name, arg);
-
-        wrapper = ap_server_root_relative(cmd->pool, wrapper);
-    }
-
-    err = fcgi_util_check_access(tp, wrapper, NULL, X_OK, fcgi_user_id, fcgi_group_id);
-    if (err) 
-    {
-        return ap_psprintf(tp, "%s: \"%s\" execute access for server "
-                           "(uid %ld, gid %ld) failed: %s", name, wrapper,
-                           (long) fcgi_user_id, (long) fcgi_group_id, err);
-    }
-
-    fcgi_wrapper = wrapper;
-
-    return NULL;
 }
 
 /*******************************************************************************
@@ -264,18 +199,8 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     s = fcgi_util_fs_get_by_id(fs_path, fcgi_util_get_server_uid(cmd->server),
                                fcgi_util_get_server_gid(cmd->server));
     if (s != NULL) {
-        if (fcgi_wrapper) {
-            return ap_psprintf(tp,
-                "%s: redefinition of a previously defined class \"%s\" "
-                "with uid=%ld and gid=%ld",
-                name, fs_path, (long) fcgi_util_get_server_uid(cmd->server),
-                (long) fcgi_util_get_server_gid(cmd->server));
-        }
-        else 
-        {
-            return ap_psprintf(tp,
-                "%s: redefinition of previously defined class \"%s\"", name, fs_path);
-        }
+        return ap_psprintf(tp,
+            "%s: redefinition of previously defined class \"%s\"", name, fs_path);
     }
 
     s = fcgi_util_fs_new(p);
@@ -326,31 +251,10 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     } /* while */
 
 
-    if (fcgi_wrapper)
-    {
-        if (s->group == NULL)
-        {
-            s->group = ap_psprintf(tp, "#%ld", fcgi_util_get_server_gid(cmd->server));
-        }
-
-        if (s->user == NULL)
-        {
-            s->user = ap_psprintf(p, "#%ld", fcgi_util_get_server_uid(cmd->server));
-        }
-
-        s->uid = ap_uname2id(s->user);
-        s->gid = ap_gname2id(s->group);
-    }
-    else if (s->user || s->group)
+    if (s->user || s->group)
     {
         ap_log_error(FCGI_LOG_WARN, cmd->server, "FastCGI: there is no "
                      "fastcgi wrapper set, user/group options are ignored");
-    }
-
-    if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
-    {
-        return ap_psprintf(tp,
-            "%s %s: invalid user or group: %s", name, fs_path, err);
     }
 
     /* Require one of -socket or -host, but not both */

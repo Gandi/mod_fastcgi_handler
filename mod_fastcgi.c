@@ -97,17 +97,12 @@ do {                                                  \
  * Global variables
  */
 
-pool *fcgi_config_pool;            	 /* the config pool */
 server_rec *fcgi_apache_main_server;
 
-const char *fcgi_wrapper = NULL;          /* wrapper path */
 uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
 gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
 
 fcgi_server *fcgi_servers = NULL;         /* AppClasses */
-
-char *fcgi_socket_dir = NULL;             /* default FastCgiIpcDir */
-
 
 char *fcgi_empty_env = NULL;
 
@@ -145,7 +140,6 @@ static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
     fcgi_config_set_fcgi_uid_n_gid(1);
 
     /* keep these handy */
-    fcgi_config_pool = p;
     fcgi_apache_main_server = s;
 
     return APCB_OK;
@@ -604,31 +598,8 @@ get_request_identity(request_rec * const r,
  */
 static void set_uid_n_gid(request_rec *r, const char **user, const char **group)
 {
-    if (fcgi_wrapper == NULL) {
-        *user = "-";
-        *group = "-";
-        return;
-    }
-
-    if (strncmp("/~", r->uri, 2) == 0) {
-        /* its a user dir uri, just send the ~user, and leave it to the PM */
-        char *end = strchr(r->uri + 2, '/');
-
-        if (end)
-            *user = memcpy(ap_pcalloc(r->pool, end - r->uri), r->uri + 1, end - r->uri - 1);
-        else
-            *user = ap_pstrdup(r->pool, r->uri + 1);
-        *group = "-";
-    }
-    else {
-        uid_t uid;
-        gid_t gid;
-
-        get_request_identity(r, &uid, &gid);
-
-        *user = ap_psprintf(r->pool, "%ld", (long) uid);
-        *group = ap_psprintf(r->pool, "%ld", (long) gid);
-    }
+    *user = "-";
+    *group = "-";
 }
 
 static void send_request_complete(fcgi_request *fr)
@@ -1376,8 +1347,6 @@ fixups(request_rec * r)
 static const command_rec fastcgi_cmds[] = 
 {
     AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
-
-    AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
     { NULL }
 };
