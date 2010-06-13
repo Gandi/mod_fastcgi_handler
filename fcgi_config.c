@@ -67,24 +67,6 @@ static const char *get_u_int(pool *p, const char **arg,
     return NULL;
 }
 
-const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var)
-{
-    if (*envc >= MAX_INIT_ENV_VARS) {
-        return "too many variables, must be <= MAX_INIT_ENV_VARS";
-    }
-
-    if (strchr(var, '=') == NULL) {
-        *(envp + *envc) = ap_pstrcat(p, var, "=", getenv(var), NULL);
-    }
-    else {
-        *(envp + *envc) = var;
-    }
-
-    (*envc)++;
-
-    return NULL;
-}
-
 static const char *get_pass_header(pool *p, const char **arg, array_header **array)
 {
     const char **header;
@@ -153,14 +135,14 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
     return NULL;
 }
 
-apcb_t fcgi_config_reset_globals(void* dummy)
+apr_status_t fcgi_config_reset_globals(void* dummy)
 {
     fcgi_servers = NULL;
     fcgi_config_set_fcgi_uid_n_gid(0);
 
     dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
 
-    return APCB_OK;
+    return APR_SUCCESS;
 }
 
 /*******************************************************************************

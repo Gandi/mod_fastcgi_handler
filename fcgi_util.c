@@ -30,23 +30,6 @@ fcgi_util_get_server_gid(const server_rec * const s)
 }
 
 /*******************************************************************************
- * Compute printable MD5 hash. Pool p is used for scratch as well as for
- * allocating the hash - use temp storage, and dup it if you need to keep it.
- */
-char *
-fcgi_util_socket_hash_filename(pool *p, const char *path,
-        const char *user, const char *group)
-{
-    char *buf = ap_pstrcat(p, path, user, group, NULL);
-
-    /* Canonicalize the path (remove "//", ".", "..") */
-    ap_getparents(buf);
-
-    return ap_md5(p, (unsigned char *)buf);
-}
-
-
-/*******************************************************************************
  * Build a Domain Socket Address structure, and calculate its size.
  * The error message is allocated from the pool p.  If you don't want the
  * struct sockaddr_un also allocated from p, pass it preallocated (!=NULL).
@@ -161,27 +144,6 @@ fcgi_util_fs_get_by_id(const char *ePath)
             continue;
         }
         if (path[i] == '\0' || path[i] == '/') {
-            return s;
-        }
-    }
-    return NULL;
-}
-
-/*******************************************************************************
- * Find a FastCGI server with a matching fs_path, and if fcgi_wrapper is
- * enabled with matching user and group.
- */
-fcgi_server *
-fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
-{
-    char path[FCGI_MAXPATH];
-    fcgi_server *s;
-
-    ap_cpystrn(path, ePath, FCGI_MAXPATH);
-    ap_no2slash(path);
-
-    for (s = fcgi_servers; s != NULL; s = s->next) {
-        if (strcmp(s->fs_path, path) == 0) {
             return s;
         }
     }

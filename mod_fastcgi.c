@@ -97,8 +97,6 @@ do {                                                  \
  * Global variables
  */
 
-server_rec *fcgi_apache_main_server;
-
 uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
 gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
 
@@ -124,24 +122,19 @@ u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
  *
  *----------------------------------------------------------------------
  */
-static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
+static apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
                           apr_pool_t * tp, server_rec * s)
 {
     const char *err;
 
     /* Register to reset to default values when the config pool is cleaned */
-    ap_block_alarms();
     ap_register_cleanup(p, NULL, fcgi_config_reset_globals, ap_null_cleanup);
-    ap_unblock_alarms();
 
     ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);
 
     fcgi_config_set_fcgi_uid_n_gid(1);
 
-    /* keep this for debugging */
-    fcgi_apache_main_server = s;
-
-    return APCB_OK;
+    return APR_SUCCESS;
 }
 
 
@@ -441,9 +434,6 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
      */
     ap_send_http_header(r);
 
-    /* We need to reinstate our timeout, send_http_header() kill()s it */
-    ap_hard_timeout("FastCGI request processing", r);
-
     if (r->header_only) {
         /* we've got all we want from the server */
         close_connection_to_fs(fr);
@@ -520,7 +510,6 @@ static int read_from_client_n_queue(fcgi_request *fr)
         }
         else {
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
-            ap_reset_timeout(fr->r);
         }
     }
     return OK;
@@ -669,7 +658,7 @@ static int open_connection_to_fs(fcgi_request *fr)
 
     if (FD_ISSET(fr->fd, &write_fds) || FD_ISSET(fr->fd, &read_fds)) {
         int error = 0;
-        NET_SIZE_T len = sizeof(error);
+        apr_socklen_t len = sizeof(error);
 
         if (getsockopt(fr->fd, SOL_SOCKET, SO_ERROR, (char *)&error, &len) < 0) {
             /* Solaris pending error */
@@ -723,11 +712,11 @@ static void sink_client_data(fcgi_request *fr)
 	while (ap_get_client_block(fr->r, base, size) > 0);
 }
 
-static apcb_t cleanup(void *data)
+static apr_status_t cleanup(void *data)
 {
     fcgi_request * const fr = (fcgi_request *) data;
 
-    if (fr == NULL) return APCB_OK;
+    if (fr == NULL) return APR_SUCCESS;
 
     /* its more than likely already run, but... */
     close_connection_to_fs(fr);
@@ -739,7 +728,7 @@ static apcb_t cleanup(void *data)
             "FastCGI: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
     }
 
-    return APCB_OK;
+    return APR_SUCCESS;
 }
 
 static int socket_io(fcgi_request * const fr)
@@ -780,8 +769,6 @@ static int socket_io(fcgi_request * const fr)
     idle_timeout = fr->fs->idle_timeout;
 
     env.envp = NULL;
-
-    ap_hard_timeout("FastCGI request processing", r);
 
     for (;;)
     {
@@ -824,7 +811,6 @@ SERVER_SEND:
             {
                 if (open_connection_to_fs(fr) != FCGI_OK)
                 {
-                    ap_kill_timeout(r);
                     return HTTP_INTERNAL_SERVER_ERROR;
                 }
 
@@ -1010,16 +996,13 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
         if (rv != OK)
         {
-            ap_kill_timeout(r);
             return rv;
         }
 
         fr->expectingClientContent = ap_should_client_block(r);
     }
 
-    ap_block_alarms();
     ap_register_cleanup(rp, (void *)fr, cleanup, ap_null_cleanup);
-    ap_unblock_alarms();
 
     {
         rv = socket_io(fr);
@@ -1100,7 +1083,6 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         rv = HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    ap_kill_timeout(r);
     return rv;
 }
 

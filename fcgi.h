@@ -32,12 +32,7 @@
 typedef struct apr_array_header_t array_header;
 typedef struct apr_table_t table;
 typedef struct apr_pool_t pool;
-#define NET_SIZE_T apr_socklen_t
 
-typedef apr_status_t apcb_t;
-#define APCB_OK APR_SUCCESS
-
-#define XtOffsetOf APR_OFFSETOF
 #define ap_select select
 
 #define ap_user_id        unixd_config.user_id
@@ -48,13 +43,6 @@ typedef apr_status_t apcb_t;
 #ifndef S_ISDIR
 #define S_ISDIR(m)      (((m)&(S_IFMT)) == (S_IFDIR))
 #endif
-
-/* obsolete fns */
-#define ap_hard_timeout(a,b)
-#define ap_kill_timeout(a)
-#define ap_block_alarms()
-#define ap_reset_timeout(a)
-#define ap_unblock_alarms()
 
 /* starting with apache 2.2 the backward-compatibility defines for
  * 1.3 APIs are not available anymore. Define them ourselves here.
@@ -109,25 +97,6 @@ typedef struct {
     char *end;              /* end of valid data */
     char data[1];           /* buffer data */
 } Buffer;
-
-
-enum process_state {
-    FCGI_RUNNING_STATE,             /* currently running */
-    FCGI_START_STATE,               /* needs to be started by PM */
-    FCGI_VICTIM_STATE,              /* SIGTERM was sent by PM */
-    FCGI_KILLED_STATE,              /* a wait() collected VICTIM */
-    FCGI_READY_STATE                /* empty cell, init state */
-};
-
-/*
- * ServerProcess holds data for each process associated with
- * a class.  It is embedded in fcgi_server below.
- */
-typedef struct _FcgiProcessInfo {
-    pid_t pid;                       /* pid of associated process */
-    enum process_state state;        /* state of the process */
-    time_t start_time;               /* time the process was started */
-} ServerProcess;
 
 /*
  * fcgi_server holds info for each AppClass specified in this
@@ -252,24 +221,8 @@ typedef struct {
 #define SCAN_CGI_INT_REDIRECT   -2
 #define SCAN_CGI_SRV_REDIRECT   -3
 
-/* Opcodes for Server->ProcMgr communication */
-#define FCGI_SERVER_START_JOB     83        /* 'S' - start */
-#define FCGI_SERVER_RESTART_JOB   82        /* 'R' - restart */
-#define FCGI_REQUEST_TIMEOUT_JOB  84        /* 'T' - timeout */
-#define FCGI_REQUEST_COMPLETE_JOB 67        /* 'C' - complete */
-
-/* Authorizer types, for auth directives handling */
-#define FCGI_AUTH_TYPE_AUTHENTICATOR  0
-#define FCGI_AUTH_TYPE_AUTHORIZER     1
-#define FCGI_AUTH_TYPE_ACCESS_CHECKER 2
-
-/* Bits for auth_options */
-#define FCGI_AUTHORITATIVE 1
-#define FCGI_COMPAT 2
-
 #define FCGI_OK     0
 #define FCGI_FAILED 1
-
 
 #define FCGI_LOG_EMERG          __FILE__,__LINE__,APLOG_EMERG,APR_FROM_OS_ERROR(errno)
 #define FCGI_LOG_ALERT          __FILE__,__LINE__,APLOG_ALERT,APR_FROM_OS_ERROR(errno)
@@ -298,25 +251,6 @@ typedef struct {
 #define FCGI_LOG_INFO_NOERRNO     __FILE__,__LINE__,APLOG_INFO,0
 #define FCGI_LOG_DEBUG_NOERRNO    __FILE__,__LINE__,APLOG_DEBUG,0
 
-
-#ifdef FCGI_DEBUG
-#define FCGIDBG1(a)              ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a);
-#define FCGIDBG2(a,b)            ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b);
-#define FCGIDBG3(a,b,c)          ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c);
-#define FCGIDBG4(a,b,c,d)        ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d);
-#define FCGIDBG5(a,b,c,d,e)      ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d,e);
-#define FCGIDBG6(a,b,c,d,e,f)    ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d,e,f);
-#define FCGIDBG7(a,b,c,d,e,f,g)  ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d,e,f,g);
-#else
-#define FCGIDBG1(a)
-#define FCGIDBG2(a,b)
-#define FCGIDBG3(a,b,c)
-#define FCGIDBG4(a,b,c,d)
-#define FCGIDBG5(a,b,c,d,e)
-#define FCGIDBG6(a,b,c,d,e,f)
-#define FCGIDBG7(a,b,c,d,e,f,g)
-#endif
-
 /*
  * Holds the status of the sending of the environment.
  * A quick hack to dump the static vars for the NT port.
@@ -334,9 +268,7 @@ typedef struct {
  */
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_fcgi_uid_n_gid(int set);
-
-apcb_t fcgi_config_reset_globals(void * dummy);
-const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
+apr_status_t fcgi_config_reset_globals(void * dummy);
 
 /*
  * fcgi_protocol.c
@@ -376,14 +308,11 @@ void fcgi_buf_get_to_array(Buffer *buf, array_header *arr, int len);
  * fcgi_util.c
  */
 
-char *fcgi_util_socket_hash_filename(pool *p, const char *path,
-    const char *user, const char *group);
 const char *fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
     int *socket_addr_len, const char *socket_path);
 const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
     int *socket_addr_len, const char *host, unsigned short port);
 fcgi_server *fcgi_util_fs_get_by_id(const char *ePath);
-fcgi_server *fcgi_util_fs_get(const char *ePath, const char *user, const char *group);
 fcgi_server *fcgi_util_fs_new(pool *p);
 void fcgi_util_fs_add(fcgi_server *s);
 
@@ -393,8 +322,6 @@ gid_t fcgi_util_get_server_gid(const server_rec * const s);
 /*
  * Globals
  */
-
-extern server_rec *fcgi_apache_main_server;
 
 extern uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
 extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
@@ -409,4 +336,3 @@ extern u_int dynamicAppConnectTimeout;
 extern module MODULE_VAR_EXPORT fastcgi_module;
 
 #endif  /* FCGI_H */
-
