@@ -81,18 +81,6 @@
 #include "unixd.h"
 
 
-#ifndef timersub
-#define	timersub(a, b, result)                              \
-do {                                                  \
-    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;           \
-    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec;        \
-    if ((result)->tv_usec < 0) {                            \
-        --(result)->tv_sec;                                 \
-        (result)->tv_usec += 1000000;                       \
-    }                                                       \
-} while (0)
-#endif
-
 /*
  * Global variables
  */
@@ -552,19 +540,6 @@ int write_to_client(fcgi_request *fr)
 	return OK;
 }
 
-static
-void send_request_complete(fcgi_request *fr)
-{
-	if (fr->completeTime.tv_sec)
-	{
-		struct timeval qtime, rtime;
-
-		timersub(&fr->queueTime, &fr->startTime, &qtime);
-		timersub(&fr->completeTime, &fr->queueTime, &rtime);
-	}
-}
-
-
 /*******************************************************************************
  * Connect to the FastCGI server.
  */
@@ -714,8 +689,6 @@ apr_status_t cleanup(void *data)
 
 	/* its more than likely already run, but... */
 	close_connection_to_fs(fr);
-
-	send_request_complete(fr);
 
 	if (fr->fs_stderr_len) {
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
@@ -1054,7 +1027,6 @@ int create_fcgi_request(request_rec * const r, const char * const path,
 	fr->keepReadingFromFcgiApp = TRUE;
 	fr->fs = fs;
 	fr->fs_path = fs_path;
-	fr->authHeaders = apr_table_make(p, 10);
 	fr->fd = -1;
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
 	fr->header = apr_array_make(p, 1, 1);

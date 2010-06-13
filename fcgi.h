@@ -119,9 +119,6 @@ typedef struct {
     Buffer *serverOutputBuffer;  /* output buffer to FastCgi server */
     Buffer *clientInputBuffer;   /* client input buffer */
     Buffer *clientOutputBuffer;  /* client output buffer */
-    apr_table_t *authHeaders;          /* headers received from an auth fs */
-    int auth_compat;             /* whether the auth request is spec compat */
-    apr_table_t *saved_subprocess_env; /* subprocess_env before auth handling */
     int expectingClientContent;     /* >0 => more content, <=0 => no more */
     apr_array_header_t *header;
     char *fs_stderr;
@@ -135,7 +132,6 @@ typedef struct {
     int exitStatusSet;
     unsigned int requestId;
     int eofSent;
-    int dynamic;                    /* whether or not this is a dynamic app */
     struct timeval startTime;       /* dynamic app's connect() attempt start time */
     struct timeval queueTime;       /* dynamic app's connect() complete time */
     struct timeval completeTime;    /* dynamic app's connection close() time */
