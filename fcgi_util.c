@@ -168,7 +168,6 @@ fcgi_util_fs_new(pool *p)
     s->restartOnExit = FALSE;
     s->directive = APP_CLASS_UNKNOWN;
     s->processPriority = FCGI_DEFAULT_PRIORITY;
-    s->envp = &fcgi_empty_env;
 
     s->listenFd = -2;
 

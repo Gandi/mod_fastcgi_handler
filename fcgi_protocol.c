@@ -119,19 +119,19 @@ void add_pass_header_vars(fcgi_request *fr)
  * complete ENV was buffered, FALSE otherwise.  Note: envp is updated to
  * reflect the current position in the ENV.
  */
-int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
+int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
 {
+	env_status _env;
+	env_status *env = &_env;
 	int charCount;
 
-	if (env->envp == NULL) {
-		ap_add_common_vars(r);
-		add_pass_header_vars(fr);
+	ap_add_common_vars(r);
+	add_pass_header_vars(fr);
 
-		ap_add_cgi_vars(r);
+	ap_add_cgi_vars(r);
 
-		env->envp = ap_create_environment(r->pool, r->subprocess_env);
-		env->pass = PREP;
-	}
+	env->envp = ap_create_environment(r->pool, r->subprocess_env);
+	env->pass = PREP;
 
 	while (*env->envp) {
 		switch (env->pass) {

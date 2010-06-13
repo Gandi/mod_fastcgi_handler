@@ -107,9 +107,6 @@ typedef struct _FastCgiServerInfo {
     char *fs_path;                  /* pathname of executable */
     array_header *pass_headers;     /* names of headers to pass in the env */
     u_int idle_timeout;             /* fs idle secs allowed before aborting */
-    char **envp;                    /* if NOT NULL, this is the env to send
-                                     * to the fcgi app when starting a server
-                                     * managed app. */
     u_int listenQueueDepth;         /* size of listen queue for IPC */
     u_int appConnectTimeout;        /* timeout (sec) for connect() requests */
     u_int numProcesses;             /* max allowed processes of this class,
@@ -274,7 +271,7 @@ apr_status_t fcgi_config_reset_globals(void * dummy);
  */
 void fcgi_protocol_queue_begin_request(fcgi_request *fr);
 void fcgi_protocol_queue_client_buffer(fcgi_request *fr);
-int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env);
+int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr);
 int fcgi_protocol_dequeue(pool *p, fcgi_request *fr);
 
 /*
@@ -326,8 +323,6 @@ extern uid_t fcgi_user_id;                       /* the run uid of Apache & PM *
 extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
 
 extern fcgi_server *fcgi_servers;
-
-extern char *fcgi_empty_env;
 
 extern u_int dynamicAppConnectTimeout;
 

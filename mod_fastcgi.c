@@ -102,8 +102,6 @@ gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
 
 fcgi_server *fcgi_servers = NULL;         /* AppClasses */
 
-char *fcgi_empty_env = NULL;
-
 u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
 
 /*
@@ -749,15 +747,12 @@ static int socket_io(fcgi_request * const fr)
     int rv;
     int client_send = FALSE;
     int client_recv = FALSE;
-    env_status env;
     pool *rp = r->pool;
     int is_connected = 0;
 
     client_recv = (fr->expectingClientContent != 0);
 
     idle_timeout = fr->fs->idle_timeout;
-
-    env.envp = NULL;
 
     for (;;)
     {
@@ -768,7 +763,7 @@ static int socket_io(fcgi_request * const fr)
         {
         case STATE_ENV_SEND:
 
-            if (fcgi_protocol_queue_env(r, fr, &env) == 0)
+            if (fcgi_protocol_queue_env(r, fr) == 0)
             {
                 goto SERVER_SEND;
             }
