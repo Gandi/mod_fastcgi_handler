@@ -263,7 +263,6 @@ typedef struct {
  * fcgi_config.c
  */
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg);
-const char *fcgi_config_set_fcgi_uid_n_gid(int set);
 apr_status_t fcgi_config_reset_globals(void * dummy);
 
 /*
@@ -319,13 +318,9 @@ gid_t fcgi_util_get_server_gid(const server_rec * const s);
  * Globals
  */
 
-extern uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
-extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
-
 extern fcgi_server *fcgi_servers;
 
 extern u_int dynamicAppConnectTimeout;
-
 
 extern module MODULE_VAR_EXPORT fastcgi_module;
 

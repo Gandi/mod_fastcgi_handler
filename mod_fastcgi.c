@@ -97,9 +97,6 @@ do {                                                  \
  * Global variables
  */
 
-uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
-gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
-
 fcgi_server *fcgi_servers = NULL;         /* AppClasses */
 
 u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
@@ -129,8 +126,6 @@ static apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
     ap_register_cleanup(p, NULL, fcgi_config_reset_globals, ap_null_cleanup);
 
     ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);
-
-    fcgi_config_set_fcgi_uid_n_gid(1);
 
     return APR_SUCCESS;
 }

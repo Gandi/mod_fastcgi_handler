@@ -84,61 +84,17 @@ static const char *get_pass_header(pool *p, const char **arg, array_header **arr
 /*******************************************************************************
  * Return a "standard" message for common configuration errors.
  */
-static const char *invalid_value(pool *p, const char *cmd, const char *id,
-        const char *opt, const char *err)
+static
+const char *invalid_value(pool *p, const char *cmd, const char *id, const char
+		*opt, const char *err)
 {
-    return ap_psprintf(p, "%s%s%s: invalid value for %s: %s",
-                    cmd, id ? " " : "", id ? id : "",  opt, err);
-}
-
-/*******************************************************************************
- * Set/Reset the uid/gid that Apache and the PM will run as.  This is ap_user_id
- * and ap_group_id if we're started as root, and euid/egid otherwise.  Also try
- * to check that the config files don't set the User/Group after a FastCGI
- * directive is used that depends on it.
- */
-/*@@@ To be complete, we should save a handle to the server each AppClass is
- * configured in and at init() check that the user/group is still what we
- * thought it was.  Also the other directives should only be allowed in the
- * parent Apache server.
- */
-const char *fcgi_config_set_fcgi_uid_n_gid(int set)
-{
-    static int isSet = 0;
-
-    uid_t uid = geteuid();
-    gid_t gid = getegid();
-
-    if (set == 0) {
-        isSet = 0;
-        fcgi_user_id = (uid_t)-1;
-        fcgi_group_id = (gid_t)-1;
-        return NULL;
-    }
-
-    if (uid == 0) {
-        uid = ap_user_id;
-    }
-
-    if (gid == 0) {
-        gid = ap_group_id;
-    }
-
-    if (isSet && (uid != fcgi_user_id || gid != fcgi_group_id)) {
-        return "User/Group commands must preceed FastCGI server definitions";
-    }
-
-    isSet = 1;
-    fcgi_user_id = uid;
-    fcgi_group_id = gid;
-
-    return NULL;
+	return ap_psprintf(p, "%s%s%s: invalid value for %s: %s",
+			cmd, id ? " " : "", id ? id : "",  opt, err);
 }
 
 apr_status_t fcgi_config_reset_globals(void* dummy)
 {
     fcgi_servers = NULL;
-    fcgi_config_set_fcgi_uid_n_gid(0);
 
     dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
 
