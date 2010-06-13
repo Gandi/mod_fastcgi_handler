@@ -1,11 +1,6 @@
 #ifndef FCGI_PROTOCOL_H
 #define FCGI_PROTOCOL_H
 
-/*
- * Listening socket file number
- */
-#define FCGI_LISTENSOCK_FILENO 0
-
 typedef struct {
 	unsigned char version;
 	unsigned char type;
@@ -16,14 +11,6 @@ typedef struct {
 	unsigned char paddingLength;
 	unsigned char reserved;
 } FCGI_Header;
-
-#define FCGI_MAX_LENGTH 0xffff
-
-/*
- * Number of bytes in a FCGI_Header.  Future versions of the protocol
- * will not reduce this number.
- */
-#define FCGI_HEADER_LEN  8
 
 /*
  * Value for version component of FCGI_Header
@@ -51,11 +38,6 @@ typedef struct {
 #define FCGI_UNKNOWN_TYPE       11
 #define FCGI_MAXTYPE (FCGI_UNKNOWN_TYPE)
 
-/*
- * Value for requestId component of FCGI_Header
- */
-#define FCGI_NULL_REQUEST_ID     0
-
 typedef struct {
 	unsigned char roleB1;
 	unsigned char roleB0;
@@ -73,6 +55,7 @@ typedef struct {
  */
 #define FCGI_KEEP_CONN  1
 
+/* XXX: this is not private! */
 typedef struct {
 	unsigned char appStatusB3;
 	unsigned char appStatusB2;
@@ -94,23 +77,5 @@ typedef struct {
 #define FCGI_CANT_MPX_CONN    1
 #define FCGI_OVERLOADED       2
 #define FCGI_UNKNOWN_ROLE     3
-
-
-/*
- * Variable names for FCGI_GET_VALUES / FCGI_GET_VALUES_RESULT records
- */
-#define FCGI_MAX_CONNS  "FCGI_MAX_CONNS"
-#define FCGI_MAX_REQS   "FCGI_MAX_REQS"
-#define FCGI_MPXS_CONNS "FCGI_MPXS_CONNS"
-
-typedef struct {
-	unsigned char type;
-	unsigned char reserved[7];
-} FCGI_UnknownTypeBody;
-
-typedef struct {
-	FCGI_Header header;
-	FCGI_UnknownTypeBody body;
-} FCGI_UnknownTypeRecord;
 
 #endif  /* FCGI_PROTOCOL_H */
