@@ -2783,26 +2783,6 @@ static const command_rec fastcgi_cmds[] =
 
     AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE12("FastCgiAuthenticator", fcgi_config_new_auth_server,
-        (void *)FCGI_AUTH_TYPE_AUTHENTICATOR, ACCESS_CONF,
-        "a fastcgi-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("FastCgiAuthenticatorAuthoritative", fcgi_config_set_authoritative_slot,
-        (void *)XtOffsetOf(fcgi_dir_config, authenticator_options), ACCESS_CONF,
-        "Set to 'off' to allow authentication to be passed along to lower modules upon failure"),
-
-    AP_INIT_TAKE12("FastCgiAuthorizer", fcgi_config_new_auth_server,
-        (void *)FCGI_AUTH_TYPE_AUTHORIZER, ACCESS_CONF,
-        "a fastcgi-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("FastCgiAuthorizerAuthoritative", fcgi_config_set_authoritative_slot,
-        (void *)XtOffsetOf(fcgi_dir_config, authorizer_options), ACCESS_CONF,
-        "Set to 'off' to allow authorization to be passed along to lower modules upon failure"),
-
-    AP_INIT_TAKE12("FastCgiAccessChecker", fcgi_config_new_auth_server,
-        (void *)FCGI_AUTH_TYPE_ACCESS_CHECKER, ACCESS_CONF,
-        "a fastcgi-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("FastCgiAccessCheckerAuthoritative", fcgi_config_set_authoritative_slot,
-        (void *)XtOffsetOf(fcgi_dir_config, access_checker_options), ACCESS_CONF,
-        "Set to 'off' to allow access control to be passed along to lower modules upon failure"),
     { NULL }
 };
 

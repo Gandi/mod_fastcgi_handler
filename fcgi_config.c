@@ -54,60 +54,6 @@ static const char *get_host_n_port(pool *p, const char **arg,
 
     return NULL;
 }
-
-/*******************************************************************************
- * Get the next configuration directive argument, & return an u_short.
- * The pool arg should be temporary storage.
- */
-static const char *get_u_short(pool *p, const char **arg,
-        u_short *num, u_short min)
-{
-    char *ptr;
-	long tmp;
-    const char *txt = ap_getword_conf(p, arg);
-
-    if (*txt == '\0') {
-		return "\"\"";
-	}
-
-    tmp = strtol(txt, &ptr, 10);
-
-    if (*ptr != '\0') {
-        return ap_pstrcat(p, "\"", txt, "\" must be a positive integer", NULL);
-	}
-    
-	if (tmp < min || tmp > USHRT_MAX) {
-        return ap_psprintf(p, "\"%u\" must be >= %u and < %u", *num, min, USHRT_MAX);
-	}
-
-	*num = (u_short) tmp;
-
-    return NULL;
-}
-
-static const char *get_int(pool *p, const char **arg, int *num, int min)
-{
-    char *cp;
-    const char *val = ap_getword_conf(p, arg);
-
-    if (*val == '\0')
-    {
-        return "\"\"";
-    }
-
-    *num = (int) strtol(val, &cp, 10);
-
-    if (*cp != '\0')
-    {
-        return ap_pstrcat(p, "can't parse ", "\"", val, "\"", NULL);
-    }
-    else if (*num < min)
-    {
-        return ap_psprintf(p, "\"%d\" must be >= %d", *num, min);
-    }
-            
-    return NULL;
-}
 
 /*******************************************************************************
  * Get the next configuration directive argument, & return an u_int.
@@ -130,27 +76,6 @@ static const char *get_u_int(pool *p, const char **arg,
     return NULL;
 }
 
-/*******************************************************************************
- * Get the next configuration directive argument, & return a float.
- * The pool arg should be temporary storage.
- */
-static const char *get_float(pool *p, const char **arg,
-        float *num, float min, float max)
-{
-    char *ptr;
-    const char *val = ap_getword_conf(p, arg);
-
-    if (*val == '\0')
-        return "\"\"";
-    *num = (float) strtod(val, &ptr);
-
-    if (*ptr != '\0')
-        return ap_pstrcat(p, "\"", val, "\" is not a floating point number", NULL);
-    if (*num < min || *num > max)
-        return ap_psprintf(p, "\"%f\" is not between %f and %f", *num, min, max);
-    return NULL;
-}
-
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var)
 {
     if (*envc >= MAX_INIT_ENV_VARS) {
@@ -167,21 +92,6 @@ const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, ch
     (*envc)++;
 
     return NULL;
-}
-
-/*******************************************************************************
- * Get the next configuration directive argument, & add it to an env array.
- * The pool arg should be permanent storage.
- */
-static const char *get_env_var(pool *p, const char **arg, char **envp, unsigned int *envc)
-{
-    char * const val = ap_getword_conf(p, arg);
-
-    if (*val == '\0') {
-        return "\"\"";
-    }
-
-    return fcgi_config_set_env_var(p, envp, envc, val);
 }
 
 static const char *get_pass_header(pool *p, const char **arg, array_header **array)
@@ -734,60 +644,4 @@ void *fcgi_config_create_dir_config(pool *p, char *dummy)
     dir_config->access_checker_options = FCGI_AUTHORITATIVE;
 
     return dir_config;
-}
-
-
-const char *fcgi_config_new_auth_server(cmd_parms * cmd,
-    void * dircfg, const char *fs_path, const char * compat)
-{
-    fcgi_dir_config * dir_config = (fcgi_dir_config *) dircfg;
-    pool * const tp = cmd->temp_pool;
-    char * auth_server;
-
-    if (apr_filepath_merge(&auth_server, "", fs_path, 0, cmd->pool))
-        return ap_psprintf(tp, "%s %s: invalid filepath", cmd->cmd->name, fs_path);
-
-    auth_server = ap_server_root_relative(cmd->pool, auth_server);
-
-    /* Make sure its already configured or at least a candidate for dynamic */
-    if (fcgi_util_fs_get_by_id(auth_server, fcgi_util_get_server_uid(cmd->server),
-                               fcgi_util_get_server_gid(cmd->server)) == NULL) 
-    {
-        const char *err = fcgi_util_fs_is_path_ok(tp, auth_server, NULL);
-        if (err)
-            return ap_psprintf(tp, "%s: \"%s\" %s", cmd->cmd->name, auth_server, err);
-    }
-
-    if (compat && strcasecmp(compat, "-compat"))
-        return ap_psprintf(cmd->temp_pool, "%s: unknown option: \"%s\"", cmd->cmd->name, compat);
-
-    switch((int)cmd->info) {
-        case FCGI_AUTH_TYPE_AUTHENTICATOR:
-            dir_config->authenticator = auth_server;
-            dir_config->authenticator_options |= (compat) ? FCGI_COMPAT : 0;
-            break;
-        case FCGI_AUTH_TYPE_AUTHORIZER:
-            dir_config->authorizer = auth_server;
-            dir_config->authorizer_options |= (compat) ? FCGI_COMPAT : 0;
-            break;
-        case FCGI_AUTH_TYPE_ACCESS_CHECKER:
-            dir_config->access_checker = auth_server;
-            dir_config->access_checker_options |= (compat) ? FCGI_COMPAT : 0;
-            break;
-    }
-
-    return NULL;
-}
-
-const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
-    void * dir_config, int arg)
-{
-    int offset = (int)(long)cmd->info;
-
-    if (arg)
-        *((u_char *)dir_config + offset) |= FCGI_AUTHORITATIVE;
-    else
-        *((u_char *)dir_config + offset) &= ~FCGI_AUTHORITATIVE;
-
-    return NULL;
 }
