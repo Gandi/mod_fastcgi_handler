@@ -89,9 +89,6 @@ const char *invalid_value(apr_pool_t *p, const char *cmd, const char *id, const 
 apr_status_t fcgi_config_reset_globals(void *dummy)
 {
 	fcgi_servers = NULL;
-
-	dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-
 	return APR_SUCCESS;
 }
 

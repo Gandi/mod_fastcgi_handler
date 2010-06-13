@@ -24,70 +24,21 @@
  *  Rob Saccoccio <robs@ipass.net>
  */
 
-/*
- * Module design notes.
- *
- * 1. Restart cleanup.
- *
- *   mod_fastcgi spawns several processes: one process manager process
- *   and several application processes.  None of these processes
- *   handle SIGHUP, so they just go away when the Web server performs
- *   a restart (as Apache does every time it starts.)
- *
- *   In order to allow the process manager to properly cleanup the
- *   running fastcgi processes (without being disturbed by Apache),
- *   an intermediate process was introduced.  The diagram is as follows;
- *
- *   ApacheWS --> MiddleProc --> ProcMgr --> FCGI processes
- *
- *   On a restart, ApacheWS sends a SIGKILL to MiddleProc and then
- *   collects it via waitpid().  The ProcMgr periodically checks for
- *   its parent (via getppid()) and if it does not have one, as in
- *   case when MiddleProc has terminated, ProcMgr issues a SIGTERM
- *   to all FCGI processes, waitpid()s on them and then exits, so it
- *   can be collected by init(1).  Doing it any other way (short of
- *   changing Apache API), results either in inconsistent results or
- *   in generation of zombie processes.
- *
- *   XXX: How does Apache 1.2 implement "gentle" restart
- *   that does not disrupt current connections?  How does
- *   gentle restart interact with restart cleanup?
- *
- * 2. Request timeouts.
- *
- *   Earlier versions of this module used ap_soft_timeout() rather than
- *   ap_hard_timeout() and ate FastCGI server output until it completed.
- *   This precluded the FastCGI server from having to implement a
- *   SIGPIPE handler, but meant hanging the application longer than
- *   necessary.  SIGPIPE handler now must be installed in ALL FastCGI
- *   applications.  The handler should abort further processing and go
- *   back into the accept() loop.
- *
- *   Although using ap_soft_timeout() is better than ap_hard_timeout()
- *   we have to be more careful about SIGINT handling and subsequent
- *   processing, so, for now, make it hard.
- */
-
-
-#include "fcgi.h"
-
-
 #include <unistd.h>
 
 #if APR_HAVE_CTYPE_H
 #include <ctype.h>
 #endif
 
-#include "unixd.h"
+#include "fcgi.h"
 
+#include "unixd.h"
 
 /*
  * Global variables
  */
 
 fcgi_server *fcgi_servers = NULL;         /* AppClasses */
-
-u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
 
 /*
  *----------------------------------------------------------------------
@@ -120,7 +71,7 @@ apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
 /*
  *----------------------------------------------------------------------
  *
- * get_header_line --
+ * get_header_line
  *
  *      Terminate a line:  scan to the next newline, scan back to the
  *      first non-space character and store a terminating zero.  Return
@@ -145,24 +96,20 @@ apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
  *----------------------------------------------------------------------
  */
 static
-char *get_header_line(char *start, int continuation)
+char *get_header_line(char *start)
 {
 	char *p = start;
 	char *end = start;
 
-	if(p[0] == '\r'  &&  p[1] == '\n') { /* If EOL in 1st 2 chars */
-		p++;                              /*   point to \n and stop */
-	} else if(*p != '\n') {
-		if(continuation) {
-			while(*p != '\0') {
-				if(*p == '\n' && p[1] != ' ' && p[1] != '\t')
-					break;
-				p++;
-			}
-		} else {
-			while(*p != '\0' && *p != '\n') {
-				p++;
-			}
+	if (p[0] == '\r' && p[1] == '\n') { /* If EOL in 1st 2 chars */
+		p++;                            /* point to \n and stop */
+	}
+
+	else if (*p != '\n') {
+		while (*p != '\0') {
+			if (*p == '\n' && p[1] != ' ' && p[1] != '\t')
+				break;
+			p++;
 		}
 	}
 
@@ -170,10 +117,8 @@ char *get_header_line(char *start, int continuation)
 	end = p;
 	end++;
 
-	/*
-	 * Trim any trailing whitespace.
-	 */
-	while(isspace((unsigned char)p[-1]) && p > start) {
+	/* trim any trailing whitespace. */
+	while (isspace((unsigned char)p[-1]) && p > start) {
 		p--;
 	}
 
@@ -225,7 +170,7 @@ void close_connection_to_fs(fcgi_request *fr)
 /*
  *----------------------------------------------------------------------
  *
- * process_headers --
+ * process_headers
  *
  *      Call with r->parseHeader == SCAN_CGI_READING_HEADERS
  *      and initial script output in fr->header.
@@ -302,7 +247,7 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 
 	while(1) {
 		key = next;
-		next = get_header_line(next, TRUE);
+		next = get_header_line(next);
 
 		if (*key == '\0') {
 			break;
@@ -612,7 +557,7 @@ int open_connection_to_fs(fcgi_request *fr)
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"connect() timed out (appConnTimeout=%dsec)",
-				fr->fs_path, dynamicAppConnectTimeout);
+				fr->fs_path, fr->fs->appConnectTimeout);
 		return FCGI_FAILED;
 	}
 
@@ -677,32 +622,14 @@ void sink_client_data(fcgi_request *fr)
 
 	fcgi_buf_reset(fr->clientInputBuffer);
 	fcgi_buf_get_free_block_info(fr->clientInputBuffer, &base, &size);
+
 	while (ap_get_client_block(fr->r, base, size) > 0);
-}
-
-static
-apr_status_t cleanup(void *data)
-{
-	fcgi_request * const fr = (fcgi_request *) data;
-
-	if (fr == NULL) return APR_SUCCESS;
-
-	/* its more than likely already run, but... */
-	close_connection_to_fs(fr);
-
-	if (fr->fs_stderr_len) {
-		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-				"FastCGI: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
-	}
-
-	return APR_SUCCESS;
 }
 
 static
 int socket_io(fcgi_request * const fr)
 {
-	enum
-	{
+	enum {
 		STATE_SOCKET_NONE,
 		STATE_ENV_SEND,
 		STATE_CLIENT_RECV,
@@ -714,23 +641,16 @@ int socket_io(fcgi_request * const fr)
 	}
 	state = STATE_ENV_SEND;
 
-	request_rec * const r = fr->r;
+	request_rec *r = fr->r;
 
-	struct timeval timeout;
 	fd_set read_set;
 	fd_set write_set;
 	int nfds = 0;
 	int select_status = 1;
-	int idle_timeout;
+	int idle_timeout = fr->fs->idle_timeout;
 	int rv;
 	int client_send = FALSE;
-	int client_recv = FALSE;
-	apr_pool_t *rp = r->pool;
 	int is_connected = 0;
-
-	client_recv = (fr->expectingClientContent != 0);
-
-	idle_timeout = fr->fs->idle_timeout;
 
 	while (1) {
 		FD_ZERO(&read_set);
@@ -761,7 +681,7 @@ int socket_io(fcgi_request * const fr)
 SERVER_SEND:
 
 			case STATE_SERVER_SEND:
-				if (! is_connected) {
+				if (!is_connected) {
 					if (open_connection_to_fs(fr) != FCGI_OK) {
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
@@ -809,6 +729,8 @@ SERVER_SEND:
 		}
 
 		/* setup the io timeout */
+
+		struct timeval timeout;
 
 		if (BufferLength(fr->clientOutputBuffer)) {
 			/* don't let client data sit too long, it might be a push */
@@ -872,7 +794,7 @@ SERVER_SEND:
 			}
 		}
 
-		if (fcgi_protocol_dequeue(rp, fr)) {
+		if (fcgi_protocol_dequeue(r->pool, fr)) {
 			state = STATE_ERROR;
 			break;
 		}
@@ -899,12 +821,31 @@ SERVER_SEND:
 }
 
 
+static
+apr_status_t cleanup(void *data)
+{
+	fcgi_request *fr = data;
+
+	if (fr == NULL)
+		return APR_SUCCESS;
+
+	/* its more than likely already run, but... */
+	close_connection_to_fs(fr);
+
+	if (fr->fs_stderr_len) {
+		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+				"FastCGI: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
+	}
+
+	return APR_SUCCESS;
+}
+
 /*----------------------------------------------------------------------
  * This is the core routine for moving data between the FastCGI
  * application and the Web server's client.
  */
 static
-int do_work(request_rec * const r, fcgi_request * const fr)
+int do_work(request_rec *r, fcgi_request *fr)
 {
 	int rv;
 	apr_pool_t *rp = r->pool;
@@ -912,8 +853,7 @@ int do_work(request_rec * const r, fcgi_request * const fr)
 	fcgi_protocol_queue_begin_request(fr);
 
 	rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
-	if (rv != OK)
-	{
+	if (rv != OK) {
 		return rv;
 	}
 
@@ -921,27 +861,21 @@ int do_work(request_rec * const r, fcgi_request * const fr)
 
 	apr_pool_cleanup_register(rp, (void *)fr, cleanup, apr_pool_cleanup_null);
 
-	{
-		rv = socket_io(fr);
-	}
+	rv = socket_io(fr);
 
 	/* comm with the server is done */
 	close_connection_to_fs(fr);
 
 	sink_client_data(fr);
 
-	while (rv == 0 && (BufferLength(fr->serverInputBuffer) || BufferLength(fr->clientOutputBuffer)))
-	{
-		if (fcgi_protocol_dequeue(rp, fr))
-		{
+	while (rv == 0 && (BufferLength(fr->serverInputBuffer) || BufferLength(fr->clientOutputBuffer))) {
+		if (fcgi_protocol_dequeue(rp, fr)) {
 			rv = HTTP_INTERNAL_SERVER_ERROR;
 		}
 
-		if (fr->parseHeader == SCAN_CGI_READING_HEADERS)
-		{
-			const char * err = process_headers(r, fr);
-			if (err)
-			{
+		if (fr->parseHeader == SCAN_CGI_READING_HEADERS) {
+			const char *err = process_headers(r, fr);
+			if (err) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 						"FastCGI: comm with server \"%s\" aborted: "
 						"error parsing headers: %s", fr->fs_path, err);
@@ -949,14 +883,12 @@ int do_work(request_rec * const r, fcgi_request * const fr)
 			}
 		}
 
-		if (write_to_client(fr))
-		{
+		if (write_to_client(fr)) {
 			break;
 		}
 	}
 
-	switch (fr->parseHeader)
-	{
+	switch (fr->parseHeader) {
 		case SCAN_CGI_FINISHED:
 
 			/* RUSSIAN_APACHE requires rflush() over bflush() */
@@ -966,23 +898,19 @@ int do_work(request_rec * const r, fcgi_request * const fr)
 
 		case SCAN_CGI_INT_REDIRECT:
 		case SCAN_CGI_SRV_REDIRECT:
-
 			break;
 
 		case SCAN_CGI_READING_HEADERS:
-
 			ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: incomplete headers "
 					"(%d bytes) received from server \"%s\"", fr->header->nelts, fr->fs_path);
 
 			/* fall through */
 
 		case SCAN_CGI_BAD_HEADER:
-
 			rv = HTTP_INTERNAL_SERVER_ERROR;
 			break;
 
 		default:
-
 			ASSERT(0);
 			rv = HTTP_INTERNAL_SERVER_ERROR;
 	}
@@ -991,20 +919,16 @@ int do_work(request_rec * const r, fcgi_request * const fr)
 }
 
 static
-int create_fcgi_request(request_rec * const r, const char * const path,
-		fcgi_request ** const frP)
+int create_fcgi_request(request_rec *r, fcgi_request **frP)
 {
-	const char *fs_path;
-	apr_pool_t * const p = r->pool;
-	fcgi_server *fs;
-	fcgi_request * const fr = (fcgi_request *)apr_pcalloc(p, sizeof(fcgi_request));
+	apr_pool_t *p = r->pool;
 
-	fs_path = path ? path : r->filename;
+	fcgi_request *fr = apr_pcalloc(p, sizeof(fcgi_request));
 
-	fs = fcgi_util_fs_get_by_id(fs_path);
+	const char *fs_path = r->filename;
+	fcgi_server *fs = fcgi_util_fs_get_by_id(fs_path);
 
-	if (fs == NULL)
-	{
+	if (fs == NULL) {
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 				"FastCGI: invalid server \"%s\": %s", fs_path, err);
 		return HTTP_FORBIDDEN;
@@ -1034,36 +958,6 @@ int create_fcgi_request(request_rec * const r, const char * const path,
 	*frP = fr;
 
 	return OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * handler --
- *
- *      This routine gets called for a request that corresponds to
- *      a FastCGI connection.  It performs the request synchronously.
- *
- * Results:
- *      Final status of request: OK or NOT_FOUND or HTTP_INTERNAL_SERVER_ERROR.
- *
- * Side effects:
- *      Request performed.
- *
- *----------------------------------------------------------------------
- */
-
-/* Stolen from mod_cgi.c..
- * KLUDGE --- for back-combatibility, we don't have to check ExecCGI
- * in ScriptAliased directories, which means we need to know if this
- * request came through ScriptAlias or not... so the Alias module
- * leaves a note for us.
- */
-static
-int apache_is_scriptaliased(request_rec *r)
-{
-	const char *t = apr_table_get(r->notes, "alias-forced-type");
-	return t && (!strcasecmp(t, "cgi-script"));
 }
 
 /* If a script wants to produce its own Redirect body, it now
@@ -1098,9 +992,6 @@ int post_process_for_redirects(request_rec * const r,
 	}
 }
 
-/******************************************************************************
- * Process fastcgi-script requests.  Based on mod_cgi::cgi_handler().
- */
 static
 int fcgi_pass_handler(request_rec *r)
 {

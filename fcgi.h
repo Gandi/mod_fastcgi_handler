@@ -245,8 +245,6 @@ void fcgi_util_fs_add(fcgi_server *s);
 
 extern fcgi_server *fcgi_servers;
 
-extern u_int dynamicAppConnectTimeout;
-
 extern module MODULE_VAR_EXPORT fastcgi_module;
 
 #endif  /* FCGI_H */
