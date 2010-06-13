@@ -281,23 +281,6 @@ static void close_connection_to_fs(fcgi_request *fr)
         setsockopt(fr->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger)); 
         close(fr->fd);
         fr->fd = -1;
-
-
-        if (fr->dynamic && fr->keepReadingFromFcgiApp == FALSE) 
-        {
-            /* XXX FCGI_REQUEST_COMPLETE_JOB is only sent for requests which complete
-             * normally WRT the fcgi app.  There is no data sent for
-             * connect() timeouts or requests which complete abnormally.
-             * KillDynamicProcs() and RemoveRecords() need to be looked at
-             * to be sure they can reasonably handle these cases before
-             * sending these sort of stats - theres some funk in there.
-             */
-            if (fcgi_util_ticks(&fr->completeTime) < 0) 
-            {
-                /* there's no point to aborting the request, just log it */
-                ap_log_error(FCGI_LOG_ERR, fr->r->server, "FastCGI: can't get time of day");
-            }
-        }
     }
 }
 
@@ -708,91 +691,8 @@ static int open_connection_to_fs(fcgi_request *fr)
     const char *err = NULL;
 
     /* Create the connection point */
-    if (fr->dynamic) 
-    {
-        socket_path = fcgi_util_socket_hash_filename(rp, fr->fs_path, fr->user, fr->group);
-        socket_path = fcgi_util_socket_make_path_absolute(rp, socket_path, 1);
-
-        err = fcgi_util_socket_make_domain_addr(rp, (struct sockaddr_un **)&socket_addr,
-                                      &socket_addr_len, socket_path);
-        if (err) {
-            ap_log_rerror(FCGI_LOG_ERR, r,
-                "FastCGI: failed to connect to (dynamic) server \"%s\": "
-                "%s", fr->fs_path, err);
-            return FCGI_FAILED;
-        }
-    } 
-    else 
-    {
-        socket_addr = fr->fs->socket_addr;
-        socket_addr_len = fr->fs->socket_addr_len;
-    }
-
-    if (fr->dynamic)
-    {
-        struct stat sock_stat;
-        
-        if (stat(socket_path, &sock_stat) == 0)
-        {
-            /* It exists */
-            if (dynamicAutoUpdate) 
-            {
-                struct stat app_stat;
-        
-                /* TODO: follow sym links */
-        
-                if (stat(fr->fs_path, &app_stat) == 0)
-                {
-                    if (sock_stat.st_mtime < app_stat.st_mtime)
-                    {
-                        struct timeval tv = {1, 0};
-                        /* 
-                         * There's a newer one, request a restart.
-                         */
-                        send_to_pm(FCGI_SERVER_RESTART_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-
-                        /* Avoid sleep/alarm interactions */
-                        ap_select(0, NULL, NULL, NULL, &tv);
-                    }
-                }
-            }
-        }
-        else
-        {
-            int i;
-
-            send_to_pm(FCGI_SERVER_START_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-        
-            /* wait until it looks like its running - this shouldn't take
-             * very long at all - the exception is when the sockets are 
-             * removed out from under a running application - the loop 
-             * limit addresses this (preventing spinning) */
-
-            for (i = 10; i > 0; i--)
-            {
-                struct timeval tv = {0, 500000};
-                
-                /* Avoid sleep/alarm interactions */
-                ap_select(0, NULL, NULL, NULL, &tv);
-
-                if (stat(socket_path, &sock_stat) == 0)
-                {
-                    break;
-                }
-            }
-
-            if (i <= 0)
-            {
-                ap_log_rerror(FCGI_LOG_ALERT, r,
-                    "FastCGI: failed to connect to (dynamic) server \"%s\": "
-                    "something is seriously wrong, any chance the "
-                    "socket/named_pipe directory was removed?, see the "
-                    "FastCgiIpcDir directive", fr->fs_path);
-                return FCGI_FAILED;
-            }
-        }
-    }
-
+    socket_addr = fr->fs->socket_addr;
+    socket_addr_len = fr->fs->socket_addr_len;
 
     /* Create the socket */
     fr->fd = socket(socket_addr->sa_family, SOCK_STREAM, 0);
@@ -814,27 +714,13 @@ static int open_connection_to_fs(fcgi_request *fr)
     }
 
     /* If appConnectTimeout is non-zero, setup do a non-blocking connect */
-    if ((fr->dynamic && dynamicAppConnectTimeout) || (!fr->dynamic && fr->fs->appConnectTimeout)) {
+    if (fr->fs->appConnectTimeout) {
         set_nonblocking(fr, TRUE);
-    }
-
-    if (fr->dynamic) {
-        fcgi_util_ticks(&fr->startTime);
     }
 
     /* Connect */
     if (connect(fr->fd, (struct sockaddr *)socket_addr, socket_addr_len) == 0)
         goto ConnectionComplete;
-
-
-    /* ECONNREFUSED means the listen queue is full (or there isn't one).
-     * With dynamic I can at least make sure the PM knows this is occuring */
-    if (fr->dynamic && errno == ECONNREFUSED) {
-        /* @@@ This might be better as some other "kind" of message */
-        send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-
-        errno = ECONNREFUSED;
-    }
 
     if (errno != EINPROGRESS) {
         ap_log_rerror(FCGI_LOG_ERR, r,
@@ -848,53 +734,21 @@ static int open_connection_to_fs(fcgi_request *fr)
 
     errno = 0;
 
-    if (fr->dynamic) {
-        do {
-            FD_ZERO(&write_fds);
-            FD_SET(fr->fd, &write_fds);
-            read_fds = write_fds;
-            tval.tv_sec = dynamicPleaseStartDelay;
-            tval.tv_usec = 0;
+    tval.tv_sec = fr->fs->appConnectTimeout;
+    tval.tv_usec = 0;
+    FD_ZERO(&write_fds);
+    FD_SET(fr->fd, &write_fds);
+    read_fds = write_fds;
 
-            status = ap_select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
-            if (status < 0)
-                break;
+    status = ap_select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
 
-            fcgi_util_ticks(&fr->queueTime);
-
-            if (status > 0)
-                break;
-
-            /* select() timed out */
-            send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-        } while ((fr->queueTime.tv_sec - fr->startTime.tv_sec) < (int)dynamicAppConnectTimeout);
-
-        /* XXX These can be moved down when dynamic vars live is a struct */
-        if (status == 0) {
-            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
-                "FastCGI: failed to connect to server \"%s\": "
-                "connect() timed out (appConnTimeout=%dsec)", 
-                fr->fs_path, dynamicAppConnectTimeout);
-            return FCGI_FAILED;
-        }
-    }  /* dynamic */
-    else {
-        tval.tv_sec = fr->fs->appConnectTimeout;
-        tval.tv_usec = 0;
-        FD_ZERO(&write_fds);
-        FD_SET(fr->fd, &write_fds);
-        read_fds = write_fds;
-
-        status = ap_select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
-
-        if (status == 0) {
-            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
-                "FastCGI: failed to connect to server \"%s\": "
-                "connect() timed out (appConnTimeout=%dsec)", 
-                fr->fs_path, dynamicAppConnectTimeout);
-            return FCGI_FAILED;
-        }
-    }  /* !dynamic */
+    if (status == 0) {
+        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
+            "FastCGI: failed to connect to server \"%s\": "
+            "connect() timed out (appConnTimeout=%dsec)", 
+            fr->fs_path, dynamicAppConnectTimeout);
+        return FCGI_FAILED;
+    }
 
     if (status < 0) {
         ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
@@ -933,7 +787,7 @@ static int open_connection_to_fs(fcgi_request *fr)
 
 ConnectionComplete:
     /* Return to blocking mode if it was set up */
-    if ((fr->dynamic && dynamicAppConnectTimeout) || (!fr->dynamic && fr->fs->appConnectTimeout)) {
+    if (fr->fs->appConnectTimeout) {
         set_nonblocking(fr, FALSE);
     }
 
@@ -1004,7 +858,7 @@ static int socket_io(fcgi_request * const fr)
     int select_status = 1;
     int idle_timeout;
     int rv;
-    int dynamic_first_recv = fr->dynamic ? 1 : 0;
+    int dynamic_first_recv = 0;
     int client_send = FALSE;
     int client_recv = FALSE;
     env_status env;
@@ -1016,21 +870,9 @@ static int socket_io(fcgi_request * const fr)
         client_recv = (fr->expectingClientContent != 0);
     }
 
-    idle_timeout = fr->dynamic ? dynamic_idle_timeout : fr->fs->idle_timeout;
+    idle_timeout = fr->fs->idle_timeout;
 
     env.envp = NULL;
-
-    if (fr->dynamic) 
-    {
-        dynamic_last_io_time = fr->startTime;
-
-        if (dynamicAppConnectTimeout) 
-        {
-            struct timeval qwait;
-            timersub(&fr->queueTime, &fr->startTime, &qwait);
-            dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
-        }
-    }
 
     ap_hard_timeout("FastCGI request processing", r);
 
@@ -1492,7 +1334,6 @@ create_fcgi_request(request_rec * const r,
     fr->fs = fs;
     fr->fs_path = fs_path;
     fr->authHeaders = ap_make_table(p, 10);
-    fr->dynamic = (fs == NULL) ? TRUE : FALSE;
     fr->fd = -1;
 
     if (fr->nph) {
@@ -1600,15 +1441,6 @@ static int content_handler(request_rec *r)
     if (ret)
     {
         return ret;
-    }
-
-    /* If its a dynamic invocation, make sure scripts are OK here */
-    if (fr->dynamic && ! (ap_allow_options(r) & OPT_EXECCGI) 
-        && ! apache_is_scriptaliased(r)) 
-    {
-        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
-            "FastCGI: \"ExecCGI Option\" is off in this directory: %s", r->uri);
-        return HTTP_FORBIDDEN;
     }
 
     /* Process the fastcgi-script request */

@@ -165,7 +165,7 @@ static void add_auth_cgi_vars(request_rec *r, const int compat)
 
 static void add_pass_header_vars(fcgi_request *fr)
 {
-    const array_header *ph = fr->dynamic ? dynamic_pass_headers : fr->fs->pass_headers;
+    const array_header *ph = fr->fs->pass_headers;
 
     if (ph) {
         const char **elt = (const char **)ph->elts;
