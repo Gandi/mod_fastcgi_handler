@@ -128,15 +128,10 @@
 
 #define DEFAULT_SOCK_DIR "\\\\.\\pipe\\FastCGI\\"
 
-#elif defined(APACHE2)
+#else /* !WIN32 */
 
 /* Default dir for Unix/Domain sockets */
 #define DEFAULT_SOCK_DIR  DEFAULT_REL_RUNTIMEDIR "/fastcgi"
-
-#else /* !WIN32 && !APACHE2 */
-
-/* Default dir for Unix/Domain sockets */
-#define DEFAULT_SOCK_DIR "logs/fastcgi"
 
 #endif
 
@@ -199,21 +194,7 @@
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
-#ifdef APACHE2
-
 #define get_signal_text(a)  apr_signal_description_get(a)
-
-#else /* !APACHE2 */
-
-/* This is (more or less) from http_main.c. It should be in an Apache header */
-#ifndef SYS_SIGLIST
-#define SYS_SIGLIST ap_sys_siglist
-extern const char *ap_sys_siglist[]; 
-#endif
-
-#define get_signal_text(a)  SYS_SIGLIST[WTERMSIG(a)]
-
-#endif /* !APACHE2 */
 
 #endif	/* MOD_FASTCGI_H */
 

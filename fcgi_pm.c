@@ -5,7 +5,7 @@
 
 #include "fcgi.h"
 
-#if defined(APACHE2) && !defined(WIN32)
+#if !defined(WIN32)
 #include <pwd.h>
 #include <unistd.h>
 #include "unixd.h"
@@ -30,9 +30,7 @@ time_t fcgi_dynamic_last_analyzed = 0;    /* last time calculation was
 static time_t now = 0;
 
 #ifdef WIN32
-#ifdef APACHE2
 #include "mod_cgi.h"
-#endif
 #pragma warning ( disable : 4100 4102 )
 static BOOL bTimeToDie = FALSE;  /* process termination flag */
 HANDLE fcgi_event_handles[3];
@@ -457,7 +455,6 @@ FailedSystemCallExit:
 
 #else /* WIN32 */
 
-#ifdef APACHE2
 
     /* based on mod_cgi.c:run_cgi_child() */
 
@@ -584,175 +581,6 @@ CLEANUP:
 
     return proc.pid;
 
-#else /* WIN32 && !APACHE2 */
-
-    /* Adapted from Apache's util_script.c ap_call_exec() */
-    char *interpreter = NULL;
-    char *quoted_filename;
-    char *pCommand;
-    char *pEnvBlock, *pNext;
-
-    int i = 0;
-    int iEnvBlockLen = 1;
-
-    file_type_e fileType;
-
-    STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-
-    request_rec r;
-    pid_t pid = -1;
-
-    pool * tp = ap_make_sub_pool(fcgi_config_pool);
-
-    HANDLE listen_handle = INVALID_HANDLE_VALUE;
-    char * termination_env_string = NULL;
-
-    process->terminationEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    if (process->terminationEvent == NULL)
-    {
-        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-            "FastCGI: can't create termination event for server \"%s\", "
-            "CreateEvent() failed", fs->fs_path);
-        goto CLEANUP;
-    }
-    SetHandleInformation(process->terminationEvent, HANDLE_FLAG_INHERIT, TRUE);
-    
-    termination_env_string = ap_psprintf(tp, 
-        "_FCGI_SHUTDOWN_EVENT_=%ld", process->terminationEvent);
-    
-    if (fs->socket_path) 
-    {
-        SECURITY_ATTRIBUTES sa;
-
-        sa.lpSecurityDescriptor = NULL;
-        sa.bInheritHandle = TRUE;
-        sa.nLength = sizeof(sa);
-
-        listen_handle = CreateNamedPipe(fs->socket_path, 
-            PIPE_ACCESS_DUPLEX,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-            PIPE_UNLIMITED_INSTANCES, 4096, 4096, 0, &sa);
-
-        if (listen_handle == INVALID_HANDLE_VALUE) 
-        {
-            ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                "FastCGI: can't exec server \"%s\", CreateNamedPipe() failed", fs->fs_path);
-            goto CLEANUP;
-        }
-    }
-    else 
-    {
-        listen_handle = (HANDLE) fs->listenFd;
-    }
-
-    memset(&si, 0, sizeof(si));
-    memset(&pi, 0, sizeof(pi));
-    memset(&r,  0, sizeof(r));
-
-    /* Can up a fake request to pass to ap_get_win32_interpreter() */
-    r.per_dir_config = fcgi_apache_main_server->lookup_defaults;
-    r.server = fcgi_apache_main_server;
-    r.filename = (char *) fs->fs_path;
-    r.pool = tp;
-
-    fileType = ap_get_win32_interpreter(&r, &interpreter);
-
-    if (fileType == eFileTypeUNKNOWN) {
-        ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
-            "FastCGI: %s is not executable; ensure interpreted scripts have "
-            "\"#!\" as their first line", 
-            fs->fs_path);
-        ap_destroy_pool(tp);
-        goto CLEANUP;
-    }
-
-    /*
-     * We have the interpreter (if there is one) and we have 
-     * the arguments (if there are any).
-     * Build the command string to pass to CreateProcess. 
-     */
-    quoted_filename = ap_pstrcat(tp, "\"", fs->fs_path, "\"", NULL);
-    if (interpreter && *interpreter) {
-        pCommand = ap_pstrcat(tp, interpreter, " ", quoted_filename, NULL);
-    }
-    else {
-        pCommand = quoted_filename;
-    }
-
-    /*
-     * Make child process use hPipeOutputWrite as standard out,
-     * and make sure it does not show on screen.
-     */
-    si.cb = sizeof(si);
-    si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-    si.wShowWindow = SW_HIDE;
-    si.hStdInput   = listen_handle;
-
-    /* XXX These should be open to the error_log */
-    si.hStdOutput  = INVALID_HANDLE_VALUE;
-    si.hStdError   = INVALID_HANDLE_VALUE;
-
-    /*
-     * Win32's CreateProcess call requires that the environment
-     * be passed in an environment block, a null terminated block of
-     * null terminated strings.
-     * @todo we should store the env in this format for win32.
-     */  
-    while (fs->envp[i]) 
-    {
-        iEnvBlockLen += strlen(fs->envp[i]) + 1;
-        i++;
-    }
-
-    iEnvBlockLen += strlen(termination_env_string) + 1;
-    iEnvBlockLen += strlen(fs->mutex_env_string) + 1;
-
-    pEnvBlock = (char *) ap_pcalloc(tp, iEnvBlockLen);
-
-    i = 0;
-    pNext = pEnvBlock;
-    while (fs->envp[i]) 
-    {
-        strcpy(pNext, fs->envp[i]);
-        pNext += strlen(pNext) + 1;
-        i++;
-    }
-
-    strcpy(pNext, termination_env_string);
-    pNext += strlen(pNext) + 1;
-    strcpy(pNext, fs->mutex_env_string);
-    
-    if (CreateProcess(NULL, pCommand, NULL, NULL, TRUE, 
-                      0,
-                      pEnvBlock,
-                      ap_make_dirstr_parent(tp, fs->fs_path),
-                      &si, &pi)) 
-    {
-        /* Hack to get 16-bit CGI's working. It works for all the 
-         * standard modules shipped with Apache. pi.dwProcessId is 0 
-         * for 16-bit CGIs and all the Unix specific code that calls 
-         * ap_call_exec interprets this as a failure case. And we can't 
-         * use -1 either because it is mapped to 0 by the caller.
-         */
-        pid = (fileType == eFileTypeEXE16) ? -2 : pi.dwProcessId;
-
-        process->handle = pi.hProcess;
-        CloseHandle(pi.hThread);
-    }
-
-CLEANUP:
-
-    if (fs->socket_path && listen_handle != INVALID_HANDLE_VALUE) 
-    {
-        CloseHandle(listen_handle);
-    }
-
-    ap_destroy_pool(tp);
-
-    return pid;
-
-#endif /* !APACHE2 */
 #endif /* WIN32 */
 }
 
@@ -957,11 +785,7 @@ static void dynamic_read_msgs(int read_ready)
     cjob = joblist;
 #endif
 
-#ifdef APACHE2
     apr_pool_create(&tp, fcgi_config_pool);
-#else
-    tp = ap_make_sub_pool(fcgi_config_pool);
-#endif
 
 #ifndef WIN32
     for (ptr1 = buf; ptr1; ptr1 = ptr2) {
@@ -1058,11 +882,7 @@ static void dynamic_read_msgs(int read_ready)
             
             /* Create a perm subpool to hold the new server data,
              * we can destroy it if something doesn't pan out */
-#ifdef APACHE2
             apr_pool_create(&sp, fcgi_config_pool);
-#else
-            sp = ap_make_sub_pool(fcgi_config_pool);
-#endif
 
             /* Create a new "dynamic" server */
             s = fcgi_util_fs_new(sp);
@@ -1632,11 +1452,7 @@ static void setup_signals(void)
 }
 #endif
 
-#if !defined(WIN32) && !defined(APACHE2)
-int fcgi_pm_main(void *dummy, child_info *info)
-#else
 void fcgi_pm_main(void *dummy)
-#endif
 {
     fcgi_server *s;
     unsigned int i;

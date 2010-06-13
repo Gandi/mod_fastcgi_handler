@@ -71,7 +71,6 @@
 
 #include "fcgi.h"
 
-#ifdef APACHE2
 #ifndef WIN32
 
 #include <unistd.h>
@@ -82,7 +81,6 @@
 
 #include "unixd.h"
 
-#endif
 #endif
 
 #ifndef timersub
@@ -255,12 +253,8 @@ static void send_to_pm(const char id, const char * const fs_path,
  *
  *----------------------------------------------------------------------
  */
-#ifdef APACHE2
 static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog, 
                           apr_pool_t * tp, server_rec * s)
-#else
-static apcb_t init_module(server_rec *s, pool *p)
-#endif
 {
 #ifndef WIN32
     const char *err;
@@ -271,11 +265,7 @@ static apcb_t init_module(server_rec *s, pool *p)
     ap_register_cleanup(p, NULL, fcgi_config_reset_globals, ap_null_cleanup);
     ap_unblock_alarms();
 
-#ifdef APACHE2
     ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);    
-#else
-    ap_add_version_component("mod_fastcgi/" MOD_FASTCGI_VERSION);
-#endif
 
     fcgi_config_set_fcgi_uid_n_gid(1);
 
@@ -306,7 +296,6 @@ static apcb_t init_module(server_rec *s, pool *p)
      * Under Unix, the -X switch causes two calls to init() but no detach
      * (but all subprocesses are wacked so the PM is toasted anyway)! */
 
-#ifdef APACHE2
     {
         void * first_pass;
         apr_pool_userdata_get(&first_pass, "mod_fastcgi", s->process->pool);
@@ -317,12 +306,6 @@ static apcb_t init_module(server_rec *s, pool *p)
             return APCB_OK;
         }
     }
-#else /* !APACHE2 */
-
-    if (ap_standalone && ap_restart_time == 0)
-        return;
-
-#endif
 
     /* Create the pipe for comm with the PM */
     if (pipe(fcgi_pm_pipe) < 0) {
@@ -331,7 +314,6 @@ static apcb_t init_module(server_rec *s, pool *p)
 
     /* Start the Process Manager */
 
-#ifdef APACHE2
     {
         apr_proc_t * proc = apr_palloc(p, sizeof(*proc));
         apr_status_t rv;
@@ -353,15 +335,6 @@ static apcb_t init_module(server_rec *s, pool *p)
 
         apr_pool_note_subprocess(p, proc, APR_KILL_ONLY_ONCE);
     }
-#else /* !APACHE2 */
-
-    fcgi_pm_pid = ap_spawn_child(p, fcgi_pm_main, NULL, kill_only_once, NULL, NULL, NULL);
-    if (fcgi_pm_pid <= 0) {
-        ap_log_error(FCGI_LOG_ALERT, s,
-            "FastCGI: can't start the process manager, spawn_child() failed");
-    }
-
-#endif /* !APACHE2 */
 
     close(fcgi_pm_pipe[0]);
 
@@ -371,11 +344,7 @@ static apcb_t init_module(server_rec *s, pool *p)
 }
 
 #ifdef WIN32
-#ifdef APACHE2
 static apcb_t fcgi_child_exit(void * dc)
-#else
-static apcb_t fcgi_child_exit(server_rec *dc0, pool *dc1)
-#endif 
 {
     /* Signal the PM thread to exit*/
     SetEvent(fcgi_event_handles[TERM_EVENT]);
@@ -387,11 +356,7 @@ static apcb_t fcgi_child_exit(server_rec *dc0, pool *dc1)
 }
 #endif /* WIN32 */
 
-#ifdef APACHE2
 static void fcgi_child_init(apr_pool_t * p, server_rec * dc)
-#else
-static void fcgi_child_init(server_rec *dc, pool *p)
-#endif
 {
 #ifdef WIN32
     /* Create the MBOX, TERM, and WAKE event handlers */
@@ -425,9 +390,7 @@ static void fcgi_child_init(server_rec *dc, pool *p)
             "_beginthread() failed to spawn the process manager");
     }
 
-#ifdef APACHE2
     apr_pool_cleanup_register(p, NULL, fcgi_child_exit, fcgi_child_exit);
-#endif
 #endif
 }
 
@@ -890,11 +853,9 @@ static int write_to_client(fcgi_request *fr)
     char *begin;
     int count;
     int rv;
-#ifdef APACHE2
     apr_bucket * bkt;
     apr_bucket_brigade * bde;
     apr_bucket_alloc_t * const bkt_alloc = fr->r->connection->bucket_alloc;
-#endif
 
     fcgi_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
     if (count == 0)
@@ -909,7 +870,6 @@ static int write_to_client(fcgi_request *fr)
      * reason) so the script can be released from having to wait around
      * for the transmission to the client to complete. */
 
-#ifdef APACHE2
 
     bde = apr_brigade_create(fr->r->pool, bkt_alloc);
     bkt = apr_bucket_transient_create(begin, count, bkt_alloc);
@@ -923,15 +883,6 @@ static int write_to_client(fcgi_request *fr)
 
     rv = ap_pass_brigade(fr->r->output_filters, bde);
 
-#elif defined(RUSSIAN_APACHE)
-
-    rv = (ap_rwrite(begin, count, fr->r) != count);
-
-#else
-
-    rv = (ap_bwrite(fr->r->connection->client, begin, count) != count);
-
-#endif
 
     if (rv || fr->r->connection->aborted) {
         ap_log_rerror(FCGI_LOG_INFO_NOERRNO, fr->r,
@@ -939,38 +890,6 @@ static int write_to_client(fcgi_request *fr)
         return -1;
     }
 
-#ifndef APACHE2
-
-    ap_reset_timeout(fr->r);
-
-    /* Don't bother with a wrapped buffer, limiting exposure to slow
-     * clients.  The BUFF routines don't allow a writev from above,
-     * and don't always memcpy to minimize small write()s, this should
-     * be fixed, but I didn't win much support for the idea on
-     * new-httpd - I'll have to _prove_ its a problem first.. */
-
-    /* The default behaviour used to be to flush with every write, but this
-     * can tie up the FastCGI server longer than is necessary so its an option now */
-
-    if (fr->fs ? fr->fs->flush : dynamicFlush) 
-    {
-#ifdef RUSSIAN_APACHE
-        rv = ap_rflush(fr->r);
-#else
-        rv = ap_bflush(fr->r->connection->client);
-#endif
-
-        if (rv)
-        {
-            ap_log_rerror(FCGI_LOG_INFO_NOERRNO, fr->r,
-                "FastCGI: client stopped connection before send body completed");
-            return -1;
-        }
-
-        ap_reset_timeout(fr->r);
-    }
-
-#endif /* !APACHE2 */
 
     fcgi_buf_toss(fr->clientOutputBuffer, count);
     return OK;
@@ -984,7 +903,7 @@ get_request_identity(request_rec * const r,
 #if defined(WIN32) 
     *uid = (uid_t) 0;
     *gid = (gid_t) 0;
-#elif defined(APACHE2)
+#else
     ap_unix_identity_t * identity = ap_run_get_suexec_identity(r);
     if (identity) 
     {
@@ -996,9 +915,6 @@ get_request_identity(request_rec * const r,
         *uid = 0;
         *gid = 0;
     }
-#else
-    *uid = r->server->server_uid;
-    *gid = r->server->server_gid;
 #endif
 }
 
@@ -2380,9 +2296,6 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         {
             /* RUSSIAN_APACHE requires rflush() over bflush() */
             ap_rflush(r);
-#ifndef APACHE2
-            ap_bgetopt(r->connection->client, BO_BYTECT, &r->bytes_sent);
-#endif
         }
 
         /* fall through */
@@ -2439,16 +2352,6 @@ create_fcgi_request(request_rec * const r,
 
         /* dynamic? */
         
-#ifndef APACHE2
-        if (path == NULL) 
-        {
-            /* AP2: its bogus that we don't make use of r->finfo, but 
-             * its an apr_finfo_t and there is no apr_os_finfo_get() */
-
-            my_finfo = &r->finfo;
-        }
-        else
-#endif
         {
             my_finfo = (struct stat *) ap_palloc(p, sizeof(struct stat));
             
@@ -2597,10 +2500,8 @@ static int content_handler(request_rec *r)
     fcgi_request *fr = NULL;
     int ret;
 
-#ifdef APACHE2
     if (strcmp(r->handler, FASTCGI_HANDLER_NAME))
         return DECLINED;
-#endif
 
     /* Setup a new FastCGI request */
     ret = create_fcgi_request(r, NULL, &fr);
@@ -2737,11 +2638,7 @@ AuthenticationFailed:
     ap_note_basic_auth_failure(r);
     ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
         "FastCGI: authentication failed for user \"%s\": %s",
-#ifdef APACHE2
         r->user, r->uri);
-#else
-        r->connection->user, r->uri);
-#endif
 
         return (res == OK) ? HTTP_UNAUTHORIZED : res;
 }
@@ -2802,11 +2699,7 @@ AuthorizationFailed:
     ap_note_basic_auth_failure(r);
     ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
         "FastCGI: authorization failed for user \"%s\": %s", 
-#ifdef APACHE2
         r->user, r->uri);
-#else
-        r->connection->user, r->uri);
-#endif
 
     return (res == OK) ? HTTP_UNAUTHORIZED : res;
 }
@@ -2881,18 +2774,6 @@ fixups(request_rec * r)
     return DECLINED;
 }
 
-#ifndef APACHE2
-
-# define AP_INIT_RAW_ARGS(directive, func, mconfig, where, help) \
-    { directive, func, mconfig, where, RAW_ARGS, help }
-# define AP_INIT_TAKE1(directive, func, mconfig, where, help) \
-    { directive, func, mconfig, where, TAKE1, help }
-# define AP_INIT_TAKE12(directive, func, mconfig, where, help) \
-    { directive, func, mconfig, where, TAKE12, help }
-# define AP_INIT_FLAG(directive, func, mconfig, where, help) \
-    { directive, func, mconfig, where, FLAG, help }
-
-#endif
 
 static const command_rec fastcgi_cmds[] = 
 {
@@ -2933,7 +2814,6 @@ static const command_rec fastcgi_cmds[] =
     { NULL }
 };
 
-#ifdef APACHE2
 
 static void register_hooks(apr_pool_t * p)
 {
@@ -2957,39 +2837,3 @@ module AP_MODULE_DECLARE_DATA fastcgi_module =
     fastcgi_cmds,                   /* command table */
     register_hooks,                 /* set up other request processing hooks */
 };
-
-#else /* !APACHE2 */
-
-handler_rec fastcgi_handlers[] = {
-    { FCGI_MAGIC_TYPE, content_handler },
-    { FASTCGI_HANDLER_NAME, content_handler },
-    { NULL }
-};
-
-module MODULE_VAR_EXPORT fastcgi_module = {
-    STANDARD_MODULE_STUFF,
-    init_module,              /* initializer */
-    fcgi_config_create_dir_config,    /* per-dir config creator */
-    NULL,                      /* per-dir config merger (default: override) */
-    NULL,                      /* per-server config creator */
-    NULL,                      /* per-server config merger (default: override) */
-    fastcgi_cmds,              /* command table */
-    fastcgi_handlers,          /* [9] content handlers */
-    NULL,                      /* [2] URI-to-filename translation */
-    check_user_authentication, /* [5] authenticate user_id */
-    check_user_authorization,  /* [6] authorize user_id */
-    check_access,              /* [4] check access (based on src & http headers) */
-    NULL,                      /* [7] check/set MIME type */
-    fixups,                    /* [8] fixups */
-    NULL,                      /* [10] logger */
-    NULL,                      /* [3] header-parser */
-    fcgi_child_init,           /* process initialization */
-#ifdef WIN32
-    fcgi_child_exit,           /* process exit/cleanup */
-#else
-    NULL,
-#endif
-    NULL                       /* [1] post read-request handling */
-};
-
-#endif /* !APACHE2 */

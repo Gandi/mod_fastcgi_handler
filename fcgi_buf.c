@@ -7,9 +7,7 @@
 #ifdef WIN32
 #pragma warning( disable : 4127 )
 #else
-#ifdef APACHE2
 #include <unistd.h>
-#endif
 #endif
 
 /*******************************************************************************

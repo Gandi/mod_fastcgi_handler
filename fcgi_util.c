@@ -6,7 +6,7 @@
 
 #ifdef WIN32
 #pragma warning( disable : 4100 )
-#elif defined(APACHE2)
+#else
 #include <netdb.h>
 #include <unistd.h>
 #include <grp.h>
@@ -24,12 +24,9 @@ fcgi_util_get_server_uid(const server_rec * const s)
 {
 #if defined(WIN32) 
     return (uid_t) 0;
-#elif defined(APACHE2)
+#else
     /* the main server's uid */
     return ap_user_id;
-#else
-    /* the vhost's uid */
-    return s->server_uid;
 #endif
 }
 
@@ -38,12 +35,9 @@ fcgi_util_get_server_gid(const server_rec * const s)
 {
 #if defined(WIN32) 
     return (uid_t) 0;
-#elif defined(APACHE2)
+#else
     /* the main server's gid */
     return ap_group_id;
-#else
-    /* the vhost's gid */
-    return s->server_gid;
 #endif
 }
  
@@ -109,11 +103,7 @@ const char *
 fcgi_util_socket_make_path_absolute(pool * const p, 
         const char *const file, const int dynamic)
 {
-#ifdef APACHE2
     if (ap_os_is_path_absolute(p, (char *) file))
-#else
-    if (ap_os_is_path_absolute(file))
-#endif
     {
 	    return file;
     }
@@ -165,7 +155,7 @@ convert_string_to_in_addr(const char * const hostname, struct in_addr * const ad
 
     addr->s_addr = inet_addr((char *)hostname);
 
-#if !defined(INADDR_NONE) && defined(APACHE2)
+#if !defined(INADDR_NONE)
 #define INADDR_NONE APR_INADDR_NONE
 #endif
     

@@ -4,10 +4,7 @@
 
 #include "fcgi.h"
 #include "fcgi_protocol.h"
-
-#ifdef APACHE2
 #include "apr_lib.h"
-#endif
 
 #ifdef WIN32
 #pragma warning( disable : 4706)

@@ -29,12 +29,6 @@
 #include "util_script.h"
 #include "util_md5.h"
 
-/* AP2TODO there's probably a better way */
-#ifdef STANDARD20_MODULE_STUFF
-#define APACHE2
-#endif
-
-#ifdef APACHE2
 
 #include <sys/stat.h>
 #include "ap_compat.h"
@@ -107,26 +101,12 @@ typedef apr_status_t apcb_t;
 #define NO_WRITEV
 #endif
 
-#else /* !APACHE2 */
-
-#include "http_conf_globals.h"
-typedef void apcb_t;
-#define APCB_OK 
-
-#if MODULE_MAGIC_NUMBER < 19990320
-#error "This version of mod_fastcgi is incompatible with Apache versions older than 1.3.6."
-#endif
-
-#endif /* !APACHE2 */
 
 #ifndef NO_WRITEV 
 #include <sys/uio.h>
 #endif
 
 #ifdef WIN32
-#ifndef APACHE2
-#include "multithread.h"
-#endif
 #pragma warning(default : 4115)
 #else
 #include <sys/un.h>
@@ -349,7 +329,6 @@ typedef struct
 #define FCGI_OK     0
 #define FCGI_FAILED 1
 
-#ifdef APACHE2
 
 #ifdef WIN32
 #define FCGI_LOG_EMERG          __FILE__,__LINE__,APLOG_EMERG,APR_FROM_OS_ERROR(GetLastError())
@@ -389,47 +368,6 @@ typedef struct
 #define FCGI_LOG_INFO_NOERRNO     __FILE__,__LINE__,APLOG_INFO,0
 #define FCGI_LOG_DEBUG_NOERRNO    __FILE__,__LINE__,APLOG_DEBUG,0
 
-#else /* !APACHE2 */
-
-#ifdef WIN32
-#define FCGI_LOG_EMERG          __FILE__,__LINE__,APLOG_EMERG|APLOG_WIN32ERROR
-#define FCGI_LOG_ALERT          __FILE__,__LINE__,APLOG_ALERT|APLOG_WIN32ERROR
-#define FCGI_LOG_CRIT           __FILE__,__LINE__,APLOG_CRIT|APLOG_WIN32ERROR
-#define FCGI_LOG_ERR            __FILE__,__LINE__,APLOG_ERR|APLOG_WIN32ERROR
-#define FCGI_LOG_WARN           __FILE__,__LINE__,APLOG_WARNING|APLOG_WIN32ERROR
-#define FCGI_LOG_NOTICE         __FILE__,__LINE__,APLOG_NOTICE|APLOG_WIN32ERROR
-#define FCGI_LOG_INFO           __FILE__,__LINE__,APLOG_INFO|APLOG_WIN32ERROR
-#define FCGI_LOG_DEBUG          __FILE__,__LINE__,APLOG_DEBUG|APLOG_WIN32ERROR
-#else /* !WIN32 */
-#define FCGI_LOG_EMERG          __FILE__,__LINE__,APLOG_EMERG
-#define FCGI_LOG_ALERT          __FILE__,__LINE__,APLOG_ALERT
-#define FCGI_LOG_CRIT           __FILE__,__LINE__,APLOG_CRIT
-#define FCGI_LOG_ERR            __FILE__,__LINE__,APLOG_ERR
-#define FCGI_LOG_WARN           __FILE__,__LINE__,APLOG_WARNING
-#define FCGI_LOG_NOTICE         __FILE__,__LINE__,APLOG_NOTICE
-#define FCGI_LOG_INFO           __FILE__,__LINE__,APLOG_INFO
-#define FCGI_LOG_DEBUG          __FILE__,__LINE__,APLOG_DEBUG
-#endif
-
-#define FCGI_LOG_EMERG_ERRNO    __FILE__,__LINE__,APLOG_EMERG     /* system is unusable */
-#define FCGI_LOG_ALERT_ERRNO    __FILE__,__LINE__,APLOG_ALERT     /* action must be taken immediately */
-#define FCGI_LOG_CRIT_ERRNO     __FILE__,__LINE__,APLOG_CRIT      /* critical conditions */
-#define FCGI_LOG_ERR_ERRNO      __FILE__,__LINE__,APLOG_ERR       /* error conditions */
-#define FCGI_LOG_WARN_ERRNO     __FILE__,__LINE__,APLOG_WARNING   /* warning conditions */
-#define FCGI_LOG_NOTICE_ERRNO   __FILE__,__LINE__,APLOG_NOTICE    /* normal but significant condition */
-#define FCGI_LOG_INFO_ERRNO     __FILE__,__LINE__,APLOG_INFO      /* informational */
-#define FCGI_LOG_DEBUG_ERRNO    __FILE__,__LINE__,APLOG_DEBUG     /* debug-level messages */
-
-#define FCGI_LOG_EMERG_NOERRNO    __FILE__,__LINE__,APLOG_EMERG|APLOG_NOERRNO
-#define FCGI_LOG_ALERT_NOERRNO    __FILE__,__LINE__,APLOG_ALERT|APLOG_NOERRNO
-#define FCGI_LOG_CRIT_NOERRNO     __FILE__,__LINE__,APLOG_CRIT|APLOG_NOERRNO
-#define FCGI_LOG_ERR_NOERRNO      __FILE__,__LINE__,APLOG_ERR|APLOG_NOERRNO
-#define FCGI_LOG_WARN_NOERRNO     __FILE__,__LINE__,APLOG_WARNING|APLOG_NOERRNO
-#define FCGI_LOG_NOTICE_NOERRNO   __FILE__,__LINE__,APLOG_NOTICE|APLOG_NOERRNO
-#define FCGI_LOG_INFO_NOERRNO     __FILE__,__LINE__,APLOG_INFO|APLOG_NOERRNO
-#define FCGI_LOG_DEBUG_NOERRNO    __FILE__,__LINE__,APLOG_DEBUG|APLOG_NOERRNO
-
-#endif /* !APACHE2 */
 
 #ifdef FCGI_DEBUG
 #define FCGIDBG1(a)              ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a);
@@ -485,7 +423,7 @@ const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, ch
 /*
  * fcgi_pm.c
  */
-#if defined(WIN32) || defined(APACHE2)
+#ifdef WIN32
 void fcgi_pm_main(void *dummy);
 #else
 int fcgi_pm_main(void *dummy, child_info *info);

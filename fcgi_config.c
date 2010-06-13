@@ -5,7 +5,6 @@
 #define CORE_PRIVATE
 #include "fcgi.h"
 
-#ifdef APACHE2
 
 #include <limits.h>
 #include "mpm_common.h"     /* ap_uname2id, ap_gname2id */
@@ -17,7 +16,6 @@
 #include "unixd.h"
 #endif
 
-#endif
 
 #ifdef WIN32
 /* warning C4100: unreferenced formal parameter */
@@ -389,7 +387,6 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
     if (!wax)
         return NULL;
 
-#ifdef APACHE2
     {
         apr_dir_t * dir;
         apr_finfo_t finfo;
@@ -411,32 +408,6 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
         }
     }
 
-#else /* !APACHE2 */
-    {
-        DIR *dp;
-        struct dirent *dirp = NULL;
-
-        tp = ap_make_sub_pool(p);
-
-        dp = ap_popendir(tp, fcgi_dynamic_dir);
-        if (dp == NULL) {
-            ap_destroy_pool(tp);
-            return ap_psprintf(p, "can't open dynamic directory \"%s\": %s",
-                fcgi_dynamic_dir, strerror(errno));
-        }
-
-        /* delete the contents */
-
-        while ((dirp = readdir(dp)) != NULL) 
-        {
-            if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
-                continue;
-
-            unlink(ap_pstrcat(tp, fcgi_dynamic_dir, "/", dirp->d_name, NULL));
-        }
-    }
-
-#endif /* !APACHE2 */
 
     ap_destroy_pool(tp);
 
@@ -480,12 +451,8 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
 #ifndef WIN32
 
-#ifdef APACHE2
     if (apr_filepath_merge(&arg_nc, "", arg, 0, cmd->pool))
         return ap_psprintf(tp, "%s %s: invalid filepath", name, arg);
-#else
-    arg_nc = ap_os_canonical_filename(cmd->pool, arg_nc);
-#endif
 
     arg_nc = ap_server_root_relative(cmd->pool, arg_nc);
 
@@ -561,12 +528,8 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
     }
     else
     {
-#ifdef APACHE2
         if (apr_filepath_merge(&wrapper, "", arg, 0, cmd->pool))
             return ap_psprintf(tp, "%s %s: invalid filepath", name, arg);
-#else
-        wrapper = ap_os_canonical_filename(cmd->pool, (char *) arg);
-#endif
 
         wrapper = ap_server_root_relative(cmd->pool, wrapper);
     }
@@ -616,12 +579,8 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     if ((err = fcgi_config_set_fcgi_uid_n_gid(1)) != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
 
-#ifdef APACHE2
     if (apr_filepath_merge(&fs_path, "", fs_path, 0, p))
         return ap_psprintf(tp, "%s %s: invalid filepath", name, fs_path);
-#else
-    fs_path = ap_os_canonical_filename(p, fs_path);
-#endif
     fs_path = ap_server_root_relative(p, fs_path);
 
     ap_getparents(fs_path);
@@ -864,12 +823,8 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
         return ap_pstrcat(tp, name, " requires a path and either a -socket or -host option", NULL);
     }
 
-#ifdef APACHE2
     if (apr_filepath_merge(&fs_path, "", fs_path, 0, p))
         return ap_psprintf(tp, "%s %s: invalid filepath", name, fs_path);
-#else
-    fs_path = ap_os_canonical_filename(p, fs_path);
-#endif
 
     fs_path = ap_server_root_relative(p, fs_path);
 
@@ -1181,12 +1136,8 @@ const char *fcgi_config_new_auth_server(cmd_parms * cmd,
     pool * const tp = cmd->temp_pool;
     char * auth_server;
 
-#ifdef APACHE2
     if (apr_filepath_merge(&auth_server, "", fs_path, 0, cmd->pool))
         return ap_psprintf(tp, "%s %s: invalid filepath", cmd->cmd->name, fs_path);
-#else
-    auth_server = (char *) ap_os_canonical_filename(cmd->pool, fs_path);
-#endif
 
     auth_server = ap_server_root_relative(cmd->pool, auth_server);
 
