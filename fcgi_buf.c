@@ -432,7 +432,7 @@ void fcgi_buf_get_to_buf(Buffer *dest, Buffer *src, int len)
 }
 
 static
-void array_grow(array_header *arr, int n)
+void array_grow(apr_array_header_t *arr, int n)
 {
 	if (n <= 0)
 		return;
@@ -450,7 +450,7 @@ void array_grow(array_header *arr, int n)
 }
 
 static
-void array_cat_block(array_header *arr, void *block, int n)
+void array_cat_block(apr_array_header_t *arr, void *block, int n)
 {
 	array_grow(arr, n);
 	memcpy(arr->elts + arr->nelts * arr->elt_size, block, n * arr->elt_size);
@@ -461,7 +461,7 @@ void array_cat_block(array_header *arr, void *block, int n)
  * Append "len" bytes from "buf" into "arr".  Apache arrays are used
  * whenever the data being handled is binary (may contain null chars).
  */
-void fcgi_buf_get_to_array(Buffer *buf, array_header *arr, int len)
+void fcgi_buf_get_to_array(Buffer *buf, apr_array_header_t *arr, int len)
 {
 	int len1 = min(buf->length, buf->data + buf->size - buf->begin);
 

@@ -99,7 +99,7 @@ void build_env_header(int nameLen, int valueLen, unsigned char *headerBuffPtr,
 static
 void add_pass_header_vars(fcgi_request *fr)
 {
-	const array_header *ph = fr->fs->pass_headers;
+	const apr_array_header_t *ph = fr->fs->pass_headers;
 
 	if (ph) {
 		const char **elt = (const char **)ph->elts;

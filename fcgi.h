@@ -29,7 +29,6 @@
 #include "apr_strings.h"
 
 
-typedef struct apr_array_header_t array_header;
 typedef struct apr_table_t table;
 typedef struct apr_pool_t pool;
 
@@ -70,7 +69,7 @@ typedef struct {
 typedef struct _FastCgiServerInfo {
     int flush;
     char *fs_path;                  /* pathname of executable */
-    array_header *pass_headers;     /* names of headers to pass in the env */
+    apr_array_header_t *pass_headers;     /* names of headers to pass in the env */
     u_int idle_timeout;             /* fs idle secs allowed before aborting */
     u_int listenQueueDepth;         /* size of listen queue for IPC */
     u_int appConnectTimeout;        /* timeout (sec) for connect() requests */
@@ -144,7 +143,7 @@ typedef struct {
     int auth_compat;             /* whether the auth request is spec compat */
     table *saved_subprocess_env; /* subprocess_env before auth handling */
     int expectingClientContent;     /* >0 => more content, <=0 => no more */
-    array_header *header;
+    apr_array_header_t *header;
     char *fs_stderr;
     int fs_stderr_len;
     int parseHeader;                /* TRUE iff parsing response headers */
@@ -251,7 +250,7 @@ int fcgi_buf_add_block(Buffer *bufPtr, char *data, int datalen);
 int fcgi_buf_add_string(Buffer *bufPtr, char *str);
 int fcgi_buf_get_to_block(Buffer *bufPtr, char *data, int datalen);
 void fcgi_buf_get_to_buf(Buffer *toPtr, Buffer *fromPtr, int len);
-void fcgi_buf_get_to_array(Buffer *buf, array_header *arr, int len);
+void fcgi_buf_get_to_array(Buffer *buf, apr_array_header_t *arr, int len);
 
 /*
  * fcgi_util.c

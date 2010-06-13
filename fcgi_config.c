@@ -61,7 +61,7 @@ const char *get_u_int(pool *p, const char **arg, u_int *num, u_int min)
 }
 
 static
-const char *get_pass_header(pool *p, const char **arg, array_header **array)
+const char *get_pass_header(pool *p, const char **arg, apr_array_header_t **array)
 {
 	const char **header;
 
