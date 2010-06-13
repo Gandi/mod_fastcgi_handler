@@ -121,8 +121,6 @@ static
 apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
 		apr_pool_t * tp, server_rec * s)
 {
-	const char *err;
-
 	/* Register to reset to default values when the config pool is cleaned */
 	apr_pool_cleanup_register(p, NULL, fcgi_config_reset_globals, apr_pool_cleanup_null);
 
@@ -271,23 +269,17 @@ void close_connection_to_fs(fcgi_request *fr)
 static
 const char *process_headers(request_rec *r, fcgi_request *fr)
 {
-	char *p, *next, *name, *value;
-	int len, flag;
-	int hasContentType, hasStatus, hasLocation;
-
 	ASSERT(fr->parseHeader == SCAN_CGI_READING_HEADERS);
 
 	if (fr->header == NULL)
 		return NULL;
 
-	/*
-	 * Do we have the entire header?  Scan for the blank line that
-	 * terminates the header.
-	 */
-	p = (char *)fr->header->elts;
-	len = fr->header->nelts;
-	flag = 0;
-	while(len-- && flag < 2) {
+	/* do we have the entire header? scan for the blank line that terminates the header. */
+	char *p = (char *)fr->header->elts;
+	int len = fr->header->nelts;
+	int flag = 0;
+
+	while (len-- && flag < 2) {
 		switch(*p) {
 			case '\r':
 				break;
@@ -306,78 +298,89 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 		p++;
 	}
 
-	/* Return (to be called later when we have more data)
-	 * if we don't have an entire header. */
+	/* return (to be called later when we have more data) if we don't have an
+	 * entire header. */
 	if (flag < 2)
 		return NULL;
 
-	/*
-	 * Parse all the headers.
-	 */
+	/* parse all the headers. */
 	fr->parseHeader = SCAN_CGI_FINISHED;
+
+	int hasContentType, hasStatus, hasLocation;
 	hasContentType = hasStatus = hasLocation = FALSE;
-	next = (char *)fr->header->elts;
-	for(;;) {
-		next = get_header_line(name = next, TRUE);
-		if (*name == '\0') {
+
+	char *next = (char *)fr->header->elts;
+	char *key, *value;
+
+	while(1) {
+		key = next;
+		next = get_header_line(next, TRUE);
+
+		if (*key == '\0') {
 			break;
 		}
-		if ((p = strchr(name, ':')) == NULL) {
+
+		if ((p = strchr(key, ':')) == NULL) {
 			goto BadHeader;
 		}
+
 		value = p + 1;
-		while (p != name && isspace((unsigned char)*(p - 1))) {
+		while (p != key && isspace((unsigned char)*(p - 1))) { /* XXX: always false since p-1 is always ':' ? */
 			p--;
 		}
-		if (p == name) {
+
+		if (p == key) {
 			goto BadHeader;
 		}
+
 		*p = '\0';
-		if (strpbrk(name, " \t") != NULL) {
+		if (strpbrk(key, " \t") != NULL) {
 			*p = ' ';
 			goto BadHeader;
 		}
+
 		while (isspace((unsigned char)*value)) {
 			value++;
 		}
 
-		if (strcasecmp(name, "Status") == 0) {
+		if (strcasecmp(key, "Status") == 0) {
 			int statusValue = strtol(value, NULL, 10);
 
 			if (hasStatus) {
 				goto DuplicateNotAllowed;
 			}
+
 			if (statusValue < 0) {
 				fr->parseHeader = SCAN_CGI_BAD_HEADER;
 				return apr_psprintf(r->pool, "invalid Status '%s'", value);
 			}
+
 			hasStatus = TRUE;
 			r->status = statusValue;
 			r->status_line = apr_pstrdup(r->pool, value);
-			continue;
 		}
 
-		if (strcasecmp(name, "Content-type") == 0) {
+		else if (strcasecmp(key, "Content-type") == 0) {
 			if (hasContentType) {
 				goto DuplicateNotAllowed;
 			}
+
 			hasContentType = TRUE;
 			r->content_type = apr_pstrdup(r->pool, value);
-			continue;
 		}
 
-		if (strcasecmp(name, "Location") == 0) {
+		else if (strcasecmp(key, "Location") == 0) {
 			if (hasLocation) {
 				goto DuplicateNotAllowed;
 			}
 			hasLocation = TRUE;
 			apr_table_set(r->headers_out, "Location", value);
-			continue;
 		}
 
-		/* If the script wants them merged, it can do it */
-		apr_table_add(r->err_headers_out, name, value);
-		continue;
+		else {
+			/* If the script wants them merged, it can do it */
+			apr_table_add(r->err_headers_out, key, value);
+		}
 	}
 
 	/*
@@ -392,7 +395,7 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 		 * body, it now has to explicitly *say* "Status: 302"
 		 */
 		if (r->status == 200) {
-			if(location[0] == '/') {
+			if (location[0] == '/') {
 				/*
 				 * Location is an relative path.  This handler will
 				 * consume all script output, then have Apache perform an
@@ -413,6 +416,7 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 			}
 		}
 	}
+
 	/*
 	 * We're responding.  Send headers, buffer excess script output.
 	 */
@@ -448,14 +452,14 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 
 BadHeader:
 	/* Log first line of a multi-line header */
-	if ((p = strpbrk(name, "\r\n")) != NULL)
+	if ((p = strpbrk(key, "\r\n")) != NULL)
 		*p = '\0';
 	fr->parseHeader = SCAN_CGI_BAD_HEADER;
-	return apr_psprintf(r->pool, "malformed header '%s'", name);
+	return apr_psprintf(r->pool, "malformed header '%s'", key);
 
 DuplicateNotAllowed:
 	fr->parseHeader = SCAN_CGI_BAD_HEADER;
-	return apr_psprintf(r->pool, "duplicate header '%s'", name);
+	return apr_psprintf(r->pool, "duplicate header '%s'", key);
 }
 
 /*
@@ -755,17 +759,13 @@ int socket_io(fcgi_request * const fr)
 
 	idle_timeout = fr->fs->idle_timeout;
 
-	for (;;)
-	{
+	while (1) {
 		FD_ZERO(&read_set);
 		FD_ZERO(&write_set);
 
-		switch (state)
-		{
+		switch (state) {
 			case STATE_ENV_SEND:
-
-				if (fcgi_protocol_queue_env(r, fr) == 0)
-				{
+				if (fcgi_protocol_queue_env(r, fr) == 0) {
 					goto SERVER_SEND;
 				}
 
@@ -774,15 +774,12 @@ int socket_io(fcgi_request * const fr)
 				/* fall through */
 
 			case STATE_CLIENT_RECV:
-
-				if (read_from_client_n_queue(fr))
-				{
+				if (read_from_client_n_queue(fr)) {
 					state = STATE_CLIENT_ERROR;
 					break;
 				}
 
-				if (fr->eofSent)
-				{
+				if (fr->eofSent) {
 					state = STATE_SERVER_SEND;
 				}
 
@@ -791,11 +788,8 @@ int socket_io(fcgi_request * const fr)
 SERVER_SEND:
 
 			case STATE_SERVER_SEND:
-
-				if (! is_connected)
-				{
-					if (open_connection_to_fs(fr) != FCGI_OK)
-					{
+				if (! is_connected) {
+					if (open_connection_to_fs(fr) != FCGI_OK) {
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
 
@@ -804,12 +798,9 @@ SERVER_SEND:
 					nfds = fr->fd + 1;
 				}
 
-				if (BufferLength(fr->serverOutputBuffer))
-				{
+				if (BufferLength(fr->serverOutputBuffer)) {
 					FD_SET(fr->fd, &write_set);
-				}
-				else
-				{
+				} else {
 					ASSERT(fr->eofSent);
 					state = STATE_SERVER_RECV;
 				}
@@ -817,17 +808,12 @@ SERVER_SEND:
 				/* fall through */
 
 			case STATE_SERVER_RECV:
-
 				FD_SET(fr->fd, &read_set);
-
 				/* fall through */
 
 			case STATE_CLIENT_SEND:
-
-				if (client_send || ! BufferFree(fr->clientOutputBuffer))
-				{
-					if (write_to_client(fr))
-					{
+				if (client_send || ! BufferFree(fr->clientOutputBuffer)) {
+					if (write_to_client(fr)) {
 						state = STATE_CLIENT_ERROR;
 						break;
 					}
@@ -839,29 +825,23 @@ SERVER_SEND:
 
 			case STATE_ERROR:
 			case STATE_CLIENT_ERROR:
-
 				break;
 
 			default:
-
 				ASSERT(0);
 		}
 
-		if (state == STATE_CLIENT_ERROR || state == STATE_ERROR)
-		{
+		if (state == STATE_CLIENT_ERROR || state == STATE_ERROR) {
 			break;
 		}
 
 		/* setup the io timeout */
 
-		if (BufferLength(fr->clientOutputBuffer))
-		{
+		if (BufferLength(fr->clientOutputBuffer)) {
 			/* don't let client data sit too long, it might be a push */
 			timeout.tv_sec = 0;
 			timeout.tv_usec = 100000;
-		}
-		else
-		{
+		} else {
 			timeout.tv_sec = idle_timeout;
 			timeout.tv_usec = 0;
 		}
@@ -869,24 +849,19 @@ SERVER_SEND:
 		/* wait on the socket */
 		select_status = select(nfds, &read_set, &write_set, NULL, &timeout);
 
-		if (select_status < 0)
-		{
+		if (select_status < 0) {
 			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r, "FastCGI: comm with server "
 					"\"%s\" aborted: select() failed", fr->fs_path);
 			state = STATE_ERROR;
 			break;
 		}
 
-		if (select_status == 0)
-		{
+		if (select_status == 0) {
 			/* select() timeout */
 
-			if (BufferLength(fr->clientOutputBuffer))
-			{
+			if (BufferLength(fr->clientOutputBuffer)) {
 				client_send = TRUE;
-			}
-			else
-			{
+			} else {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
 						"server \"%s\" aborted: idle timeout (%d sec)",
 						fr->fs_path, idle_timeout);
@@ -894,14 +869,11 @@ SERVER_SEND:
 			}
 		}
 
-		if (FD_ISSET(fr->fd, &write_set))
-		{
+		if (FD_ISSET(fr->fd, &write_set)) {
 			/* send to the server */
-
 			rv = fcgi_buf_socket_send(fr->serverOutputBuffer, fr->fd);
 
-			if (rv < 0)
-			{
+			if (rv < 0) {
 				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
 						"\"%s\" aborted: write failed", fr->fs_path);
 				state = STATE_ERROR;
@@ -909,39 +881,32 @@ SERVER_SEND:
 			}
 		}
 
-		if (FD_ISSET(fr->fd, &read_set))
-		{
+		if (FD_ISSET(fr->fd, &read_set)) {
 			/* recv from the server */
-
 			rv = fcgi_buf_socket_recv(fr->serverInputBuffer, fr->fd);
 
-			if (rv < 0)
-			{
+			if (rv < 0) {
 				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
 						"\"%s\" aborted: read failed", fr->fs_path);
 				state = STATE_ERROR;
 				break;
 			}
 
-			if (rv == 0)
-			{
+			if (rv == 0) {
 				fr->keepReadingFromFcgiApp = FALSE;
 				state = STATE_CLIENT_SEND;
 				break;
 			}
 		}
 
-		if (fcgi_protocol_dequeue(rp, fr))
-		{
+		if (fcgi_protocol_dequeue(rp, fr)) {
 			state = STATE_ERROR;
 			break;
 		}
 
-		if (fr->parseHeader == SCAN_CGI_READING_HEADERS)
-		{
-			const char * err = process_headers(r, fr);
-			if (err)
-			{
+		if (fr->parseHeader == SCAN_CGI_READING_HEADERS) {
+			const char *err = process_headers(r, fr);
+			if (err) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 						"FastCGI: comm with server \"%s\" aborted: "
 						"error parsing headers: %s", fr->fs_path, err);
@@ -950,8 +915,7 @@ SERVER_SEND:
 			}
 		}
 
-		if (fr->exitStatusSet)
-		{
+		if (fr->exitStatusSet) {
 			fr->keepReadingFromFcgiApp = FALSE;
 			state = STATE_CLIENT_SEND;
 			break;
@@ -1138,21 +1102,20 @@ static
 int post_process_for_redirects(request_rec * const r,
 		const fcgi_request * const fr)
 {
-	switch(fr->parseHeader) {
+	switch (fr->parseHeader) {
 		case SCAN_CGI_INT_REDIRECT:
+			r->method = apr_pstrdup(r->pool, "GET");
+			r->method_number = M_GET;
 
-			/* @@@ There are still differences between the handling in
-			 * mod_cgi and mod_fastcgi.  This needs to be revisited.
-			 */
 			/* We already read the message body (if any), so don't allow
 			 * the redirected request to think it has one.  We can ignore
 			 * Transfer-Encoding, since we used REQUEST_CHUNKED_ERROR.
 			 */
-			r->method = "GET";
-			r->method_number = M_GET;
 			apr_table_unset(r->headers_in, "Content-length");
 
-			ap_internal_redirect_handler(apr_table_get(r->headers_out, "Location"), r);
+			const char *location = apr_table_get(r->headers_out, "Location");
+			ap_internal_redirect_handler(location, r);
+
 			return OK;
 
 		case SCAN_CGI_SRV_REDIRECT:
@@ -1175,19 +1138,17 @@ int fcgi_pass_handler(request_rec *r)
 	if (strcmp(r->handler, FASTCGI_HANDLER_NAME))
 		return DECLINED;
 
-	/* Setup a new FastCGI request */
+	/* setup a new FastCGI request */
 	if ((ret = create_fcgi_request(r, NULL, &fr))) {
 		return ret;
 	}
 
-	/* Process the fastcgi-script request */
+	/* process the fastcgi-script request */
 	if ((ret = do_work(r, fr)) != OK)
 		return ret;
 
-	/* Special case redirects */
-	ret = post_process_for_redirects(r, fr);
-
-	return ret;
+	/* special case redirects */
+	return post_process_for_redirects(r, fr);
 }
 
 static
