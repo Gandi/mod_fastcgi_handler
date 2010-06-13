@@ -100,7 +100,6 @@ typedef struct _FastCgiServerInfo {
     u_long totalQueueTime;          /* microseconds spent by the web server
                                      * waiting to connect to the fastcgi app
                                      * since the last dynamicUpdateInterval. */
-    int nph;
     struct _FastCgiServerInfo *next;
 } fcgi_server;
 
@@ -141,7 +140,6 @@ typedef struct {
     struct timeval queueTime;       /* dynamic app's connect() complete time */
     struct timeval completeTime;    /* dynamic app's connection close() time */
     int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
-    int nph;
 } fcgi_request;
 
 /* Values of parseHeader field */

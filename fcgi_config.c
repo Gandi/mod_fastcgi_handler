@@ -1,7 +1,7 @@
 #include <limits.h>
 #include <unistd.h>
 
-#include "mpm_common.h"     /* ap_uname2id, ap_gname2id */
+#include "mpm_common.h"
 #include "unixd.h"
 
 #include "fcgi.h"
