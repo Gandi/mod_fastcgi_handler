@@ -111,27 +111,8 @@ char *fcgi_socket_dir = NULL;             /* default FastCgiIpcDir */
 
 char *fcgi_empty_env = NULL;
 
-u_int dynamicMaxProcs = FCGI_DEFAULT_MAX_PROCS;
-int   dynamicMinProcs = FCGI_DEFAULT_MIN_PROCS;
-int dynamicMaxClassProcs = FCGI_DEFAULT_MAX_CLASS_PROCS;
-u_int dynamicKillInterval = FCGI_DEFAULT_KILL_INTERVAL;
-u_int dynamicUpdateInterval = FCGI_DEFAULT_UPDATE_INTERVAL;
-float dynamicGain = FCGI_DEFAULT_GAIN;
-int dynamicThreshold1 = FCGI_DEFAULT_THRESHOLD_1;
-int dynamicThresholdN = FCGI_DEFAULT_THRESHOLD_N;
-u_int dynamicPleaseStartDelay = FCGI_DEFAULT_START_PROCESS_DELAY;
 u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-char **dynamicEnvp = &fcgi_empty_env;
-u_int dynamicProcessSlack = FCGI_DEFAULT_PROCESS_SLACK;
-int dynamicAutoRestart = FCGI_DEFAULT_RESTART_DYNAMIC;
-int dynamicAutoUpdate = FCGI_DEFAULT_AUTOUPDATE;
 int dynamicFlush = FCGI_FLUSH;
-u_int dynamicListenQueueDepth = FCGI_DEFAULT_LISTEN_Q;
-u_int dynamicInitStartDelay = DEFAULT_INIT_START_DELAY;
-u_int dynamicRestartDelay = FCGI_DEFAULT_RESTART_DELAY;
-array_header *dynamic_pass_headers = NULL;
-u_int dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
-int dynamicMinServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
 
 /*
  *----------------------------------------------------------------------
@@ -166,14 +147,6 @@ static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
     /* keep these handy */
     fcgi_config_pool = p;
     fcgi_apache_main_server = s;
-
-
-    if (fcgi_socket_dir == NULL)
-        fcgi_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
-
-    /* Create Unix/Domain socket directory */
-    if ((err = fcgi_config_make_dir(p, fcgi_socket_dir)))
-        ap_log_error(FCGI_LOG_ERR, s, "FastCGI: %s", err);
 
     return APCB_OK;
 }
@@ -851,14 +824,12 @@ static int socket_io(fcgi_request * const fr)
     request_rec * const r = fr->r;
 
     struct timeval timeout;
-    struct timeval dynamic_last_io_time = {0, 0};
     fd_set read_set;
     fd_set write_set;
     int nfds = 0;
     int select_status = 1;
     int idle_timeout;
     int rv;
-    int dynamic_first_recv = 0;
     int client_send = FALSE;
     int client_recv = FALSE;
     env_status env;
@@ -982,58 +953,6 @@ SERVER_SEND:
             timeout.tv_sec = 0;
             timeout.tv_usec = 100000;
         }
-        else if (dynamic_first_recv)
-        {
-            int delay;
-            struct timeval qwait;
-
-            fcgi_util_ticks(&fr->queueTime);
-
-            if (select_status) 
-            {
-                /* a send() succeeded last pass */
-                dynamic_last_io_time = fr->queueTime;
-            }
-            else 
-            {
-                /* timed out last pass */
-                struct timeval idle_time;
-        
-                timersub(&fr->queueTime, &dynamic_last_io_time, &idle_time);
-        
-                if (idle_time.tv_sec > idle_timeout) 
-                {
-                    send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-                    ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm "
-                        "with (dynamic) server \"%s\" aborted: (first read) "
-                        "idle timeout (%d sec)", fr->fs_path, idle_timeout);
-                    state = STATE_ERROR;
-                    break;
-                }
-            }
-
-            timersub(&fr->queueTime, &fr->startTime, &qwait);
-
-            delay = dynamic_first_recv * dynamicPleaseStartDelay;
-
-	    FCGIDBG5("qwait=%ld.%06ld delay=%d first_recv=%d", qwait.tv_sec, qwait.tv_usec, delay, dynamic_first_recv);
-
-            if (qwait.tv_sec < delay) 
-            {
-                timeout.tv_sec = delay;
-                timeout.tv_usec = 100000;  /* fudge for select() slop */
-                timersub(&timeout, &qwait, &timeout);
-            }
-            else 
-            {
-                /* Killed time somewhere.. client read? */
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-                dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
-                timeout.tv_sec = dynamic_first_recv * dynamicPleaseStartDelay;
-                timeout.tv_usec = 100000;  /* fudge for select() slop */
-                timersub(&timeout, &qwait, &timeout);
-            }
-        }
         else
         {
             timeout.tv_sec = idle_timeout;
@@ -1062,18 +981,6 @@ SERVER_SEND:
                     client_send = TRUE;
                 }
             }
-            else if (dynamic_first_recv) 
-            {
-                struct timeval qwait;
-
-                fcgi_util_ticks(&fr->queueTime);
-                timersub(&fr->queueTime, &fr->startTime, &qwait);
-
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-
-                dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
-                continue;
-            }
             else 
             {
                 ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
@@ -1101,12 +1008,6 @@ SERVER_SEND:
         if (FD_ISSET(fr->fd, &read_set)) 
         {
             /* recv from the server */
-
-            if (dynamic_first_recv) 
-            {
-                dynamic_first_recv = 0;
-                fcgi_util_ticks(&fr->queueTime);
-            }
 
             rv = fcgi_buf_socket_recv(fr->serverInputBuffer, fr->fd);
 
@@ -1476,8 +1377,6 @@ static const command_rec fastcgi_cmds[] =
 {
     AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE1("FastCgiIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
-
     AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
     { NULL }
@@ -1495,7 +1394,7 @@ static void register_hooks(apr_pool_t * p)
 module AP_MODULE_DECLARE_DATA fastcgi_module =
 {
     STANDARD20_MODULE_STUFF,
-    fcgi_config_create_dir_config,  /* per-directory config creator */
+    NULL,                           /* per-directory config creator */
     NULL,                           /* dir config merger */
     NULL,                           /* server config creator */
     NULL,                           /* server config merger */

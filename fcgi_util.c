@@ -55,25 +55,6 @@ static char * make_full_path(pool *a, const char *src1, const char *src2)
 }
 
 /*******************************************************************************
- * Return absolute path to file in either "regular" FCGI socket directory or
- * the dynamic directory.  Result is allocated in pool p.
- */
-const char *
-fcgi_util_socket_make_path_absolute(pool * const p, 
-        const char *const file, const int dynamic)
-{
-    if (ap_os_is_path_absolute(p, (char *) file))
-    {
-	    return file;
-    }
-    else
-    {
-        const char * parent_dir = fcgi_socket_dir;
-        return (const char *) make_full_path(p, parent_dir, file);
-    }
-}
-
-/*******************************************************************************
  * Build a Domain Socket Address structure, and calculate its size.
  * The error message is allocated from the pool p.  If you don't want the
  * struct sockaddr_un also allocated from p, pass it preallocated (!=NULL).

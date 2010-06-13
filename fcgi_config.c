@@ -161,138 +161,11 @@ apcb_t fcgi_config_reset_globals(void* dummy)
     fcgi_servers = NULL;
     fcgi_config_set_fcgi_uid_n_gid(0);
     fcgi_wrapper = NULL;
-    fcgi_socket_dir = NULL;
     
-    fcgi_dynamic_total_proc_count = 0;
-    fcgi_dynamic_epoch = 0;
-    fcgi_dynamic_last_analyzed = 0;
-
-    dynamicMaxProcs = FCGI_DEFAULT_MAX_PROCS;
-    dynamicMinProcs = FCGI_DEFAULT_MIN_PROCS;
-    dynamicMaxClassProcs = FCGI_DEFAULT_MAX_CLASS_PROCS;
-    dynamicKillInterval = FCGI_DEFAULT_KILL_INTERVAL;
-    dynamicUpdateInterval = FCGI_DEFAULT_UPDATE_INTERVAL;
-    dynamicGain = FCGI_DEFAULT_GAIN;
-    dynamicThreshold1 = FCGI_DEFAULT_THRESHOLD_1;
-    dynamicThresholdN = FCGI_DEFAULT_THRESHOLD_N;
-    dynamicPleaseStartDelay = FCGI_DEFAULT_START_PROCESS_DELAY;
     dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-    dynamicEnvp = &fcgi_empty_env;
-    dynamicProcessSlack = FCGI_DEFAULT_PROCESS_SLACK;
-    dynamicAutoRestart = FCGI_DEFAULT_RESTART_DYNAMIC;
-    dynamicAutoUpdate = FCGI_DEFAULT_AUTOUPDATE;
-    dynamicListenQueueDepth = FCGI_DEFAULT_LISTEN_Q;
-    dynamicInitStartDelay = DEFAULT_INIT_START_DELAY;
-    dynamicRestartDelay = FCGI_DEFAULT_RESTART_DELAY;
-    dynamicMinServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
-    dynamic_pass_headers = NULL;
-    dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 	dynamicFlush = FCGI_FLUSH;
 
     return APCB_OK;
-}
-
-/*******************************************************************************
- * Create a directory to hold Unix/Domain sockets.
- */
-const char *fcgi_config_make_dir(pool *tp, char *path)
-{
-    struct stat finfo;
-    const char *err = NULL;
-
-    /* Is the directory spec'd correctly */
-    if (*path != '/') {
-        return "path is not absolute (it must start with a \"/\")";
-    }
-    else {
-        int i = strlen(path) - 1;
-
-        /* Strip trailing "/"s */
-        while(i > 0 && path[i] == '/') path[i--] = '\0';
-    }
-
-    /* Does it exist? */
-    if (stat(path, &finfo) != 0) {
-        /* No, but maybe we can create it */
-        if (mkdir(path, S_IRWXU) != 0)
-        {
-            return ap_psprintf(tp,
-                "doesn't exist and can't be created: %s",
-                strerror(errno));
-        }
-
-        /* If we're root, we're gonna setuid/setgid so we need to chown */
-        if (geteuid() == 0 && chown(path, ap_user_id, ap_group_id) != 0) {
-            return ap_psprintf(tp,
-                "can't chown() to the server (uid %ld, gid %ld): %s",
-                (long)ap_user_id, (long)ap_group_id, strerror(errno));
-        }
-    }
-    else {
-        /* Yes, is it a directory? */
-        if (!S_ISDIR(finfo.st_mode))
-            return "isn't a directory!";
-
-        /* Can we RWX in there? */
-        err = fcgi_util_check_access(tp, NULL, &finfo, R_OK | W_OK | X_OK,
-                          fcgi_user_id, fcgi_group_id);
-        if (err != NULL) {
-            return ap_psprintf(tp,
-                "access for server (uid %ld, gid %ld) failed: %s",
-                (long)fcgi_user_id, (long)fcgi_group_id, err);
-        }
-    }
-    return NULL;
-}
-
-/*******************************************************************************
- * Change the directory used for the Unix/Domain sockets from the default.
- * Create the directory and the "dynamic" subdirectory.
- */
-const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    pool * const tp = cmd->temp_pool;
-    const char * const name = cmd->cmd->name;
-    const char *err;
-    char * arg_nc;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-    if (fcgi_socket_dir) {
-        return ap_psprintf(tp, "%s %s: already defined as \"%s\"",
-                        name, arg, fcgi_socket_dir);
-    }
-
-    err = fcgi_config_set_fcgi_uid_n_gid(1);
-    if (err != NULL)
-        return ap_psprintf(tp, "%s %s: %s", name, arg, err);
-
-    if (fcgi_servers != NULL) {
-        return ap_psprintf(tp,
-            "The %s command must preceed static FastCGI server definitions",
-            name);
-    }
-
-    arg_nc = ap_pstrdup(cmd->pool, arg);
-
-
-    if (apr_filepath_merge(&arg_nc, "", arg, 0, cmd->pool))
-        return ap_psprintf(tp, "%s %s: invalid filepath", name, arg);
-
-    arg_nc = ap_server_root_relative(cmd->pool, arg_nc);
-
-
-    fcgi_socket_dir = arg_nc;
-
-    err = fcgi_config_make_dir(tp, fcgi_socket_dir);
-    if (err != NULL)
-        return ap_psprintf(tp, "%s %s: %s", name, arg_nc, err);
-
-    return NULL;
 }
 
 /*******************************************************************************
@@ -499,12 +372,6 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
     } else {
 
-        if (fcgi_socket_dir == NULL)
-        {
-            fcgi_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
-        }
-
-        s->socket_path = fcgi_util_socket_make_path_absolute(p, s->socket_path, 0);
         err = fcgi_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
                                   &s->socket_addr_len, s->socket_path);
         if (err != NULL)
@@ -515,15 +382,4 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     fcgi_util_fs_add(s);
 
     return NULL;
-}
-
-void *fcgi_config_create_dir_config(pool *p, char *dummy)
-{
-    fcgi_dir_config *dir_config = ap_pcalloc(p, sizeof(fcgi_dir_config));
-
-    dir_config->authenticator_options = FCGI_AUTHORITATIVE;
-    dir_config->authorizer_options = FCGI_AUTHORITATIVE;
-    dir_config->access_checker_options = FCGI_AUTHORITATIVE;
-
-    return dir_config;
 }

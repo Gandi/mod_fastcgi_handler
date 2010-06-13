@@ -267,16 +267,6 @@ typedef struct {
 #define FCGI_AUTHORITATIVE 1
 #define FCGI_COMPAT 2
 
-typedef struct
-{
-    const char *authorizer;
-    u_char authorizer_options;
-    const char *authenticator;
-    u_char authenticator_options;
-    const char *access_checker;
-    u_char access_checker_options;
-} fcgi_dir_config;
-
 #define FCGI_OK     0
 #define FCGI_FAILED 1
 
@@ -342,18 +332,9 @@ typedef struct {
 /*
  * fcgi_config.c
  */
-void *fcgi_config_create_dir_config(pool *p, char *dummy);
-const char *fcgi_config_make_dir(pool *tp, char *path);
-const char *fcgi_config_make_dynamic_dir(pool *p, const int wax);
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_fcgi_uid_n_gid(int set);
 
-const char *fcgi_config_new_auth_server(cmd_parms * cmd,
-    void *dir_config, const char *fs_path, const char * compat);
-
-const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
-    void * dir_config, int arg);
-const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg);
 apcb_t fcgi_config_reset_globals(void * dummy);
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
@@ -398,8 +379,6 @@ void fcgi_buf_get_to_array(Buffer *buf, array_header *arr, int len);
 
 char *fcgi_util_socket_hash_filename(pool *p, const char *path,
     const char *user, const char *group);
-const char *fcgi_util_socket_make_path_absolute(pool * const p,
-    const char *const file, const int dynamic);
 const char *fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
     int *socket_addr_len, const char *socket_path);
 const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
@@ -439,31 +418,7 @@ extern char *fcgi_socket_dir;             /* default FastCgiIpcDir */
 
 extern char *fcgi_empty_env;
 
-extern int fcgi_dynamic_total_proc_count;
-extern time_t fcgi_dynamic_epoch;
-extern time_t fcgi_dynamic_last_analyzed;
-
-
-extern u_int dynamicMaxProcs;
-extern int dynamicMinProcs;
-extern int dynamicMaxClassProcs;
-extern u_int dynamicKillInterval;
-extern u_int dynamicUpdateInterval;
-extern float dynamicGain;
-extern int dynamicThreshold1;
-extern int dynamicThresholdN;
-extern u_int dynamicPleaseStartDelay;
 extern u_int dynamicAppConnectTimeout;
-extern char **dynamicEnvp;
-extern u_int dynamicProcessSlack;
-extern int dynamicAutoRestart;
-extern int dynamicAutoUpdate;
-extern u_int dynamicListenQueueDepth;
-extern u_int dynamicInitStartDelay;
-extern u_int dynamicRestartDelay;
-extern array_header *dynamic_pass_headers;
-extern u_int dynamic_idle_timeout;
-extern int dynamicMinServerLife;
 extern int dynamicFlush;
 
 
