@@ -122,11 +122,6 @@ typedef struct _FastCgiServerInfo {
     int bad;                        /* is [not] having start problems */
     struct sockaddr *socket_addr;   /* Socket Address of FCGI app server class */
     int socket_addr_len;            /* Length of socket */
-    enum {APP_CLASS_UNKNOWN,
-          APP_CLASS_STANDARD,
-          APP_CLASS_EXTERNAL,
-          APP_CLASS_DYNAMIC}
-         directive;                 /* AppClass or ExternalAppClass */
     const char *socket_path;        /* Name used to create a socket */
     const char *host;               /* Hostname for externally managed
                                      * FastCGI application processes */

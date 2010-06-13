@@ -152,7 +152,6 @@ fcgi_util_fs_new(pool *p)
     s->restartDelay = FCGI_DEFAULT_RESTART_DELAY;
 	s->minServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
     s->restartOnExit = FALSE;
-    s->directive = APP_CLASS_UNKNOWN;
     s->processPriority = FCGI_DEFAULT_PRIORITY;
 
     s->listenFd = -2;
