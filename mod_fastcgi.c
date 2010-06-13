@@ -109,10 +109,6 @@ fcgi_server *fcgi_servers = NULL;         /* AppClasses */
 char *fcgi_socket_dir = NULL;             /* default FastCgiIpcDir */
 
 
-int fcgi_pm_pipe[2] = { -1, -1 };
-pid_t fcgi_pm_pid = -1;
-
-
 char *fcgi_empty_env = NULL;
 
 u_int dynamicMaxProcs = FCGI_DEFAULT_MAX_PROCS;
@@ -136,52 +132,6 @@ u_int dynamicRestartDelay = FCGI_DEFAULT_RESTART_DELAY;
 array_header *dynamic_pass_headers = NULL;
 u_int dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 int dynamicMinServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
-
-/*******************************************************************************
- * Construct a message and write it to the pm_pipe.
- */
-static void send_to_pm(const char id, const char * const fs_path,
-     const char *user, const char * const group, const unsigned long q_usec,
-     const unsigned long req_usec)
-{
-    static int failed_count = 0;
-    int buflen = 0;
-    char buf[FCGI_MAX_MSG_LEN];
-
-    if (strlen(fs_path) > FCGI_MAXPATH) {
-        ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server, 
-            "FastCGI: the path \"%s\" is too long (>%d) for a dynamic server", fs_path, FCGI_MAXPATH);
-        return;
-    }
-
-    switch(id) {
-
-    case FCGI_SERVER_START_JOB:
-    case FCGI_SERVER_RESTART_JOB:
-        buflen = sprintf(buf, "%c %s %s %s*", id, fs_path, user, group);
-        break;
-
-    case FCGI_REQUEST_TIMEOUT_JOB:
-        buflen = sprintf(buf, "%c %s %s %s*", id, fs_path, user, group);
-        break;
-
-    case FCGI_REQUEST_COMPLETE_JOB:
-        buflen = sprintf(buf, "%c %s %s %s %lu %lu*", id, fs_path, user, group, q_usec, req_usec);
-        break;
-    }
-
-    ASSERT(buflen <= FCGI_MAX_MSG_LEN);
-
-    /* There is no apache flag or function that can be used to id
-     * restart/shutdown pending so ignore the first few failures as
-     * once it breaks it will stay broke */
-    if (write(fcgi_pm_pipe[1], (const void *)buf, buflen) != buflen 
-        && failed_count++ > 10) 
-    {
-        ap_log_error(FCGI_LOG_WARN, fcgi_apache_main_server,
-            "FastCGI: write() to PM failed (ignore if a restart or shutdown is pending)");
-    }
-}
 
 /*
  *----------------------------------------------------------------------
@@ -224,55 +174,6 @@ static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
     /* Create Unix/Domain socket directory */
     if ((err = fcgi_config_make_dir(p, fcgi_socket_dir)))
         ap_log_error(FCGI_LOG_ERR, s, "FastCGI: %s", err);
-
-    /* Spawn the PM only once.  Under Unix, Apache calls init() routines
-     * twice, once before detach() and once after.  Win32 doesn't detach.
-     * Under DSO, DSO modules are unloaded between the two init() calls.
-     * Under Unix, the -X switch causes two calls to init() but no detach
-     * (but all subprocesses are wacked so the PM is toasted anyway)! */
-
-    {
-        void * first_pass;
-        apr_pool_userdata_get(&first_pass, "mod_fastcgi", s->process->pool);
-        if (first_pass == NULL) 
-        {
-            apr_pool_userdata_set((const void *)1, "mod_fastcgi",
-                                  apr_pool_cleanup_null, s->process->pool);
-            return APCB_OK;
-        }
-    }
-
-    /* Create the pipe for comm with the PM */
-    if (pipe(fcgi_pm_pipe) < 0) {
-        ap_log_error(FCGI_LOG_ERR, s, "FastCGI: pipe() failed");
-    }
-
-    /* Start the Process Manager */
-
-    {
-        apr_proc_t * proc = apr_palloc(p, sizeof(*proc));
-        apr_status_t rv;
-
-        rv = apr_proc_fork(proc, tp);
-
-        if (rv == APR_INCHILD)
-        {
-            /* child */
-            fcgi_pm_main(NULL);
-            exit(1);
-        }
-        else if (rv != APR_INPARENT)
-        {
-            return rv;
-        }
-
-        /* parent */
-
-        apr_pool_note_subprocess(p, proc, APR_KILL_ONLY_ONCE);
-    }
-
-    close(fcgi_pm_pipe[0]);
-
 
     return APCB_OK;
 }

@@ -189,16 +189,6 @@ apcb_t fcgi_config_reset_globals(void* dummy)
     dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 	dynamicFlush = FCGI_FLUSH;
 
-	/* Close any old pipe (HUP/USR1) */
-	if (fcgi_pm_pipe[0] != -1) {
-		close(fcgi_pm_pipe[0]);
-		fcgi_pm_pipe[0] = -1;
-	}
-	if (fcgi_pm_pipe[1] != -1) {
-		close(fcgi_pm_pipe[1]);
-		fcgi_pm_pipe[1] = -1;
-	}
-
     return APCB_OK;
 }
 

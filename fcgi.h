@@ -359,11 +359,6 @@ apcb_t fcgi_config_reset_globals(void * dummy);
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
 
 /*
- * fcgi_pm.c
- */
-int fcgi_pm_main(void *dummy, child_info *info);
-
-/*
  * fcgi_protocol.c
  */
 void fcgi_protocol_queue_begin_request(fcgi_request *fr);
@@ -441,11 +436,6 @@ extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM *
 extern fcgi_server *fcgi_servers;
 
 extern char *fcgi_socket_dir;             /* default FastCgiIpcDir */
-
-/* pipe used for comm between the request handlers and the PM */
-extern int fcgi_pm_pipe[];
-
-extern pid_t fcgi_pm_pid;
 
 extern char *fcgi_empty_env;
 
