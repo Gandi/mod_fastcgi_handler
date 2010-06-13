@@ -27,12 +27,12 @@ fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
     int socket_pathLen = strlen(socket_path);
 
     if (socket_pathLen >= sizeof((*socket_addr)->sun_path)) {
-        return ap_pstrcat(p, "path \"", socket_path,
+        return apr_pstrcat(p, "path \"", socket_path,
                        "\" is too long for a Domain socket", NULL);
     }
 
     if (*socket_addr == NULL)
-        *socket_addr = ap_pcalloc(p, sizeof(struct sockaddr_un));
+        *socket_addr = apr_pcalloc(p, sizeof(struct sockaddr_un));
     else
         memset(*socket_addr, 0, sizeof(struct sockaddr_un));
 
@@ -83,7 +83,7 @@ fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
         int *socket_addr_len, const char *host, unsigned short port)
 {
     if (*socket_addr == NULL)
-        *socket_addr = ap_pcalloc(p, sizeof(struct sockaddr_in));
+        *socket_addr = apr_pcalloc(p, sizeof(struct sockaddr_in));
     else
         memset(*socket_addr, 0, sizeof(struct sockaddr_in));
 
@@ -93,7 +93,7 @@ fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
     /* Get an in_addr represention of the host */
     if (host != NULL) {
         if (convert_string_to_in_addr(host, &(*socket_addr)->sin_addr) != 1) {
-            return ap_pstrcat(p, "failed to resolve \"", host,
+            return apr_pstrcat(p, "failed to resolve \"", host,
                            "\" to exactly one IP address", NULL);
         }
     } else {
@@ -115,7 +115,7 @@ fcgi_util_fs_get_by_id(const char *ePath)
     fcgi_server *s;
 
     /* @@@ This should now be done in the loop below */
-    ap_cpystrn(path, ePath, FCGI_MAXPATH);
+    apr_cpystrn(path, ePath, FCGI_MAXPATH);
     ap_no2slash(path);
 
     for (s = fcgi_servers; s != NULL; s = s->next) {
@@ -142,7 +142,7 @@ fcgi_util_fs_get_by_id(const char *ePath)
 fcgi_server *
 fcgi_util_fs_new(pool *p)
 {
-    fcgi_server *s = (fcgi_server *) ap_pcalloc(p, sizeof(fcgi_server));
+    fcgi_server *s = (fcgi_server *) apr_pcalloc(p, sizeof(fcgi_server));
 
     /* Initialize anything who's init state is not zeroizzzzed */
     s->listenQueueDepth = FCGI_DEFAULT_LISTEN_Q;

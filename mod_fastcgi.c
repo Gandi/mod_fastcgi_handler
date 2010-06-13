@@ -123,7 +123,7 @@ static apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
     const char *err;
 
     /* Register to reset to default values when the config pool is cleaned */
-    ap_register_cleanup(p, NULL, fcgi_config_reset_globals, ap_null_cleanup);
+    apr_pool_cleanup_register(p, NULL, fcgi_config_reset_globals, apr_pool_cleanup_null);
 
     ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);
 
@@ -350,11 +350,11 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
             }
             if (statusValue < 0) {
                 fr->parseHeader = SCAN_CGI_BAD_HEADER;
-                return ap_psprintf(r->pool, "invalid Status '%s'", value);
+                return apr_psprintf(r->pool, "invalid Status '%s'", value);
             }
             hasStatus = TRUE;
             r->status = statusValue;
-            r->status_line = ap_pstrdup(r->pool, value);
+            r->status_line = apr_pstrdup(r->pool, value);
             continue;
         }
 
@@ -363,7 +363,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
                 goto DuplicateNotAllowed;
             }
             hasContentType = TRUE;
-            r->content_type = ap_pstrdup(r->pool, value);
+            r->content_type = apr_pstrdup(r->pool, value);
             continue;
         }
 
@@ -372,12 +372,12 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
                 goto DuplicateNotAllowed;
             }
             hasLocation = TRUE;
-            ap_table_set(r->headers_out, "Location", value);
+            apr_table_set(r->headers_out, "Location", value);
             continue;
         }
 
         /* If the script wants them merged, it can do it */
-        ap_table_add(r->err_headers_out, name, value);
+        apr_table_add(r->err_headers_out, name, value);
         continue;
     }
 
@@ -385,7 +385,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
      * Who responds, this handler or Apache?
      */
     if (hasLocation) {
-        const char *location = ap_table_get(r->headers_out, "Location");
+        const char *location = apr_table_get(r->headers_out, "Location");
         /*
          * Based on internal redirect handling in mod_cgi.c...
          *
@@ -452,11 +452,11 @@ BadHeader:
     if ((p = strpbrk(name, "\r\n")) != NULL)
         *p = '\0';
     fr->parseHeader = SCAN_CGI_BAD_HEADER;
-    return ap_psprintf(r->pool, "malformed header '%s'", name);
+    return apr_psprintf(r->pool, "malformed header '%s'", name);
 
 DuplicateNotAllowed:
     fr->parseHeader = SCAN_CGI_BAD_HEADER;
-    return ap_psprintf(r->pool, "duplicate header '%s'", name);
+    return apr_psprintf(r->pool, "duplicate header '%s'", name);
 }
 
 /*
@@ -975,7 +975,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 
     fr->expectingClientContent = ap_should_client_block(r);
 
-    ap_register_cleanup(rp, (void *)fr, cleanup, ap_null_cleanup);
+    apr_pool_cleanup_register(rp, (void *)fr, cleanup, apr_pool_cleanup_null);
 
     {
         rv = socket_io(fr);
@@ -1054,7 +1054,7 @@ create_fcgi_request(request_rec * const r,
     const char *fs_path;
     pool * const p = r->pool;
     fcgi_server *fs;
-    fcgi_request * const fr = (fcgi_request *)ap_pcalloc(p, sizeof(fcgi_request));
+    fcgi_request * const fr = (fcgi_request *)apr_pcalloc(p, sizeof(fcgi_request));
 
     fs_path = path ? path : r->filename;
 
@@ -1087,14 +1087,14 @@ create_fcgi_request(request_rec * const r,
     fr->keepReadingFromFcgiApp = TRUE;
     fr->fs = fs;
     fr->fs_path = fs_path;
-    fr->authHeaders = ap_make_table(p, 10);
+    fr->authHeaders = apr_table_make(p, 10);
     fr->fd = -1;
 
     if (fr->nph) {
 	struct ap_filter_t *cur;
 
 	fr->parseHeader = SCAN_CGI_FINISHED;
-	fr->header = ap_make_array(p, 1, 1);
+	fr->header = apr_array_make(p, 1, 1);
 
 	/* get rid of all filters up through protocol...  since we
 	 * haven't parsed off the headers, there is no way they can
@@ -1108,7 +1108,7 @@ create_fcgi_request(request_rec * const r,
 	r->output_filters = r->proto_output_filters = cur;
     } else {
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
-	fr->header = ap_make_array(p, 1, 1);
+	fr->header = apr_array_make(p, 1, 1);
     }
 
     *frP = fr;
@@ -1141,7 +1141,7 @@ create_fcgi_request(request_rec * const r,
  */
 static int apache_is_scriptaliased(request_rec *r)
 {
-    const char *t = ap_table_get(r->notes, "alias-forced-type");
+    const char *t = apr_table_get(r->notes, "alias-forced-type");
     return t && (!strcasecmp(t, "cgi-script"));
 }
 
@@ -1164,9 +1164,9 @@ static int post_process_for_redirects(request_rec * const r,
              */
             r->method = "GET";
             r->method_number = M_GET;
-            ap_table_unset(r->headers_in, "Content-length");
+            apr_table_unset(r->headers_in, "Content-length");
 
-            ap_internal_redirect_handler(ap_table_get(r->headers_out, "Location"), r);
+            ap_internal_redirect_handler(apr_table_get(r->headers_out, "Location"), r);
             return OK;
 
         case SCAN_CGI_SRV_REDIRECT:

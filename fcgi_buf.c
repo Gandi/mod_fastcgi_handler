@@ -441,7 +441,7 @@ void array_grow(array_header *arr, int n)
 		char *new_elts;
 		int new_nalloc = (arr->nalloc <= 0) ? n : arr->nelts + n;
 
-		new_elts = ap_pcalloc(arr->pool, arr->elt_size * new_nalloc);
+		new_elts = apr_pcalloc(arr->pool, arr->elt_size * new_nalloc);
 		memcpy(new_elts, arr->elts, arr->nelts * arr->elt_size);
 
 		arr->elts = new_elts;

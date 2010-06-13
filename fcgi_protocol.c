@@ -106,9 +106,9 @@ void add_pass_header_vars(fcgi_request *fr)
 		int i = ph->nelts;
 
 		for ( ; i; --i, ++elt) {
-			const char *val = ap_table_get(fr->r->headers_in, *elt);
+			const char *val = apr_table_get(fr->r->headers_in, *elt);
 			if (val) {
-				ap_table_setn(fr->r->subprocess_env, *elt, val);
+				apr_table_setn(fr->r->subprocess_env, *elt, val);
 			}
 		}
 	}
@@ -299,7 +299,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
 
 				if (fr->fs_stderr == NULL)
 				{
-					fr->fs_stderr = ap_palloc(p, FCGI_SERVER_MAX_STDERR_LINE_LEN + 1);
+					fr->fs_stderr = apr_palloc(p, FCGI_SERVER_MAX_STDERR_LINE_LEN + 1);
 				}
 
 				/* We're gonna consume all thats here */

@@ -32,7 +32,7 @@ const char *get_host_n_port(pool *p, const char **arg, const char **host,
 	/* Convert port number */
 	tmp = (u_short) strtol(portStr, &cvptr, 10);
 	if (*cvptr != '\0' || tmp < 1 || tmp > USHRT_MAX)
-		return ap_pstrcat(p, "bad port number \"", portStr, "\"", NULL);
+		return apr_pstrcat(p, "bad port number \"", portStr, "\"", NULL);
 
 	*port = (unsigned short) tmp;
 
@@ -54,9 +54,9 @@ const char *get_u_int(pool *p, const char **arg, u_int *num, u_int min)
 	*num = (u_int)strtol(val, &ptr, 10);
 
 	if (*ptr != '\0')
-		return ap_pstrcat(p, "\"", val, "\" must be a positive integer", NULL);
+		return apr_pstrcat(p, "\"", val, "\" must be a positive integer", NULL);
 	else if (*num < min)
-		return ap_psprintf(p, "\"%u\" must be >= %u", *num, min);
+		return apr_psprintf(p, "\"%u\" must be >= %u", *num, min);
 	return NULL;
 }
 
@@ -66,10 +66,10 @@ const char *get_pass_header(pool *p, const char **arg, array_header **array)
 	const char **header;
 
 	if (!*array) {
-		*array = ap_make_array(p, 10, sizeof(char*));
+		*array = apr_array_make(p, 10, sizeof(char*));
 	}
 
-	header = (const char **)ap_push_array(*array);
+	header = (const char **)apr_array_push(*array);
 	*header = ap_getword_conf(p, arg);
 
 	return header ? NULL : "\"\"";
@@ -82,7 +82,7 @@ static
 const char *invalid_value(pool *p, const char *cmd, const char *id, const char
 		*opt, const char *err)
 {
-	return ap_psprintf(p, "%s%s%s: invalid value for %s: %s",
+	return apr_psprintf(p, "%s%s%s: invalid value for %s: %s",
 			cmd, id ? " " : "", id ? id : "",  opt, err);
 }
 
@@ -112,11 +112,11 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 	char *fs_path = ap_getword_conf(p, &arg);
 
 	if (!*fs_path) {
-		return ap_pstrcat(tp, name, " requires a path and either a -socket or -host option", NULL);
+		return apr_pstrcat(tp, name, " requires a path and either a -socket or -host option", NULL);
 	}
 
 	if (apr_filepath_merge(&fs_path, "", fs_path, 0, p))
-		return ap_psprintf(tp, "%s %s: invalid filepath", name, fs_path);
+		return apr_psprintf(tp, "%s %s: invalid filepath", name, fs_path);
 
 	fs_path = ap_server_root_relative(p, fs_path);
 
@@ -126,7 +126,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 	/* See if we've already got one of these bettys configured */
 	s = fcgi_util_fs_get_by_id(fs_path);
 	if (s != NULL) {
-		return ap_psprintf(tp,
+		return apr_psprintf(tp,
 				"%s: redefinition of previously defined class \"%s\"", name, fs_path);
 	}
 
@@ -168,19 +168,19 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 		}
 
 		else {
-			return ap_psprintf(tp, "%s %s: invalid option: %s", name, fs_path, option);
+			return apr_psprintf(tp, "%s %s: invalid option: %s", name, fs_path, option);
 		}
 	}
 
 	/* Require one of -socket or -host, but not both */
 	if (s->socket_path != NULL && s->port != 0) {
-		return ap_psprintf(tp,
+		return apr_psprintf(tp,
 				"%s %s: -host and -socket are mutually exclusive options",
 				name, fs_path);
 	}
 
 	if (s->socket_path == NULL && s->port == 0) {
-		return ap_psprintf(tp,
+		return apr_psprintf(tp,
 				"%s %s: -socket or -host option missing", name, fs_path);
 	}
 
@@ -189,12 +189,12 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 		err = fcgi_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->socket_addr,
 				&s->socket_addr_len, s->host, s->port);
 		if (err != NULL)
-			return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
+			return apr_psprintf(tp, "%s %s: %s", name, fs_path, err);
 	} else {
 		err = fcgi_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
 				&s->socket_addr_len, s->socket_path);
 		if (err != NULL)
-			return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
+			return apr_psprintf(tp, "%s %s: %s", name, fs_path, err);
 	}
 
 	/* Add it to the list of FastCGI servers */
