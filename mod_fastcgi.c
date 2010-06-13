@@ -2777,18 +2777,12 @@ fixups(request_rec * r)
 
 static const command_rec fastcgi_cmds[] = 
 {
-    AP_INIT_RAW_ARGS("AppClass",      fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("FastCgiServer", fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
-
-    AP_INIT_RAW_ARGS("ExternalAppClass",      fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
     AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
 
     AP_INIT_TAKE1("FastCgiIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE1("FastCgiSuexec",  fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
     AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_RAW_ARGS("FCGIConfig",    fcgi_config_set_config, NULL, RSRC_CONF, NULL),
     AP_INIT_RAW_ARGS("FastCgiConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),
 
     AP_INIT_TAKE12("FastCgiAuthenticator", fcgi_config_new_auth_server,

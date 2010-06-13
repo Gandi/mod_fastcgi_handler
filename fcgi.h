@@ -405,7 +405,6 @@ typedef struct {
 void *fcgi_config_create_dir_config(pool *p, char *dummy);
 const char *fcgi_config_make_dir(pool *tp, char *path);
 const char *fcgi_config_make_dynamic_dir(pool *p, const int wax);
-const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_config(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_fcgi_uid_n_gid(int set);
