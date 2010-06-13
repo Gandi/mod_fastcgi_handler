@@ -73,13 +73,6 @@ typedef struct {
  */
 #define FCGI_KEEP_CONN  1
 
-/*
- * Values for role component of FCGI_BeginRequestBody
- */
-#define FCGI_RESPONDER  1
-#define FCGI_AUTHORIZER 2
-#define FCGI_FILTER     3
-
 typedef struct {
 	unsigned char appStatusB3;
 	unsigned char appStatusB2;

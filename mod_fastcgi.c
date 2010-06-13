@@ -365,36 +365,28 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
             continue;
         }
 
-        if (fr->role == FCGI_RESPONDER) {
-            if (strcasecmp(name, "Content-type") == 0) {
-                if (hasContentType) {
-                    goto DuplicateNotAllowed;
-                }
-                hasContentType = TRUE;
-                r->content_type = ap_pstrdup(r->pool, value);
-                continue;
+        if (strcasecmp(name, "Content-type") == 0) {
+            if (hasContentType) {
+                goto DuplicateNotAllowed;
             }
-
-            if (strcasecmp(name, "Location") == 0) {
-                if (hasLocation) {
-                    goto DuplicateNotAllowed;
-                }
-                hasLocation = TRUE;
-                ap_table_set(r->headers_out, "Location", value);
-                continue;
-            }
-
-            /* If the script wants them merged, it can do it */
-            ap_table_add(r->err_headers_out, name, value);
+            hasContentType = TRUE;
+            r->content_type = ap_pstrdup(r->pool, value);
             continue;
         }
-        else {
-            ap_table_add(fr->authHeaders, name, value);
-        }
-    }
 
-    if (fr->role != FCGI_RESPONDER)
-        return NULL;
+        if (strcasecmp(name, "Location") == 0) {
+            if (hasLocation) {
+                goto DuplicateNotAllowed;
+            }
+            hasLocation = TRUE;
+            ap_table_set(r->headers_out, "Location", value);
+            continue;
+        }
+
+        /* If the script wants them merged, it can do it */
+        ap_table_add(r->err_headers_out, name, value);
+        continue;
+    }
 
     /*
      * Who responds, this handler or Apache?
@@ -761,10 +753,7 @@ static int socket_io(fcgi_request * const fr)
     pool *rp = r->pool;
     int is_connected = 0;
 
-    if (fr->role == FCGI_RESPONDER)
-    {
-        client_recv = (fr->expectingClientContent != 0);
-    }
+    client_recv = (fr->expectingClientContent != 0);
 
     idle_timeout = fr->fs->idle_timeout;
 
@@ -898,10 +887,7 @@ SERVER_SEND:
 
             if (BufferLength(fr->clientOutputBuffer))
             {
-                if (fr->role == FCGI_RESPONDER)
-                {
-                    client_send = TRUE;
-                }
+                client_send = TRUE;
             }
             else
             {
@@ -991,16 +977,13 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 
     fcgi_protocol_queue_begin_request(fr);
 
-    if (fr->role == FCGI_RESPONDER)
+    rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
+    if (rv != OK)
     {
-        rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
-        if (rv != OK)
-        {
-            return rv;
-        }
-
-        fr->expectingClientContent = ap_should_client_block(r);
+        return rv;
     }
+
+    fr->expectingClientContent = ap_should_client_block(r);
 
     ap_register_cleanup(rp, (void *)fr, cleanup, ap_null_cleanup);
 
@@ -1011,10 +994,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     /* comm with the server is done */
     close_connection_to_fs(fr);
 
-    if (fr->role == FCGI_RESPONDER)
-    {
-        sink_client_data(fr);
-    }
+    sink_client_data(fr);
 
     while (rv == 0 && (BufferLength(fr->serverInputBuffer) || BufferLength(fr->clientOutputBuffer)))
     {
@@ -1035,16 +1015,9 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
             }
         }
 
-        if (fr->role == FCGI_RESPONDER)
+        if (write_to_client(fr))
         {
-            if (write_to_client(fr))
-            {
-                break;
-            }
-        }
-        else
-        {
-            fcgi_buf_reset(fr->clientOutputBuffer);
+            break;
         }
     }
 
@@ -1052,11 +1025,8 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     {
     case SCAN_CGI_FINISHED:
 
-        if (fr->role == FCGI_RESPONDER)
-        {
-            /* RUSSIAN_APACHE requires rflush() over bflush() */
-            ap_rflush(r);
-        }
+        /* RUSSIAN_APACHE requires rflush() over bflush() */
+        ap_rflush(r);
 
         /* fall through */
 
@@ -1123,7 +1093,6 @@ create_fcgi_request(request_rec * const r,
     fr->exitStatusSet = FALSE;
     fr->requestId = 1; /* anything but zero is OK here */
     fr->eofSent = FALSE;
-    fr->role = FCGI_RESPONDER;
     fr->expectingClientContent = FALSE;
     fr->keepReadingFromFcgiApp = TRUE;
     fr->fs = fs;

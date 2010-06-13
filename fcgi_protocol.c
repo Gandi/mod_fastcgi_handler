@@ -36,9 +36,10 @@ void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
  * Build a FCGI_BeginRequest message body.
  */
 static
-void build_begin_request(unsigned int role, unsigned char keepConnection,
+void build_begin_request(unsigned char keepConnection,
 		FCGI_BeginRequestBody *body)
 {
+	unsigned int role = 1;
 	ASSERT((role >> 16) == 0);
 	body->roleB1 = (unsigned char) (role >>  8);
 	body->roleB0 = (unsigned char) role;
@@ -57,7 +58,7 @@ void fcgi_protocol_queue_begin_request(fcgi_request *fr)
 	/* We should be the first ones to use this buffer */
 	ASSERT(BufferLength(fr->serverOutputBuffer) == 0);
 
-	build_begin_request(fr->role, FALSE, &body);
+	build_begin_request(FALSE, &body);
 	queue_header(fr, FCGI_BEGIN_REQUEST, bodySize);
 	fcgi_buf_add_block(fr->serverOutputBuffer, (char *) &body, bodySize);
 }
@@ -95,87 +96,6 @@ void build_env_header(int nameLen, int valueLen, unsigned char *headerBuffPtr,
 	*headerLenPtr = headerBuffPtr - startHeaderBuffPtr;
 }
 
-/*******************************************************************************
- * A static fn stolen from Apache's util_script.c
- * Obtain the Request-URI from the original request-line, returning
- * a new string from the request pool containing the URI or "".
- */
-static
-char *original_uri(request_rec *r)
-{
-	char *first, *last;
-
-	if (r->the_request == NULL) {
-		return (char *) apr_pcalloc(r->pool, 1);
-	}
-
-	first = r->the_request;     /* use the request-line */
-
-	while (*first && !apr_isspace(*first)) {
-		++first;                /* skip over the method */
-	}
-	while (apr_isspace(*first)) {
-		++first;                /*   and the space(s)   */
-	}
-
-	last = first;
-	while (*last && !apr_isspace(*last)) {
-		++last;                 /* end at next whitespace */
-	}
-
-	return apr_pstrmemdup(r->pool, first, last - first);
-}
-
-/*******************************************************************************
- * Based on Apache's ap_add_cgi_vars() in util_script.c.
- * Apache's spins in sub_req_lookup_uri() trying to setup PATH_TRANSLATED,
- * so we just don't do that part.
- */
-static
-void add_auth_cgi_vars(request_rec *r, const int compat)
-{
-	apr_table_t *e = r->subprocess_env;
-
-	apr_table_setn(e, "GATEWAY_INTERFACE", "CGI/1.1");
-	apr_table_setn(e, "SERVER_PROTOCOL", r->protocol);
-	apr_table_setn(e, "REQUEST_METHOD", r->method);
-	apr_table_setn(e, "QUERY_STRING", r->args ? r->args : "");
-	apr_table_setn(e, "REQUEST_URI", apache_original_uri(r));
-
-	/* The FastCGI spec precludes sending of CONTENT_LENGTH, PATH_INFO,
-	 * PATH_TRANSLATED, and SCRIPT_NAME (for some reason?).  PATH_TRANSLATED we
-	 * don't have, its the variable that causes Apache to break trying to set
-	 * up (and thus the reason this fn exists vs. using ap_add_cgi_vars()). */
-	if (compat) {
-		ap_table_unset(e, "CONTENT_LENGTH");
-		return;
-	}
-
-	/* Note that the code below special-cases scripts run from includes,
-	 * because it "knows" that the sub_request has been hacked to have the
-	 * args and path_info of the original request, and not any that may have
-	 * come with the script URI in the include command.  Ugh.
-	 */
-
-	if (!strcmp(r->protocol, "INCLUDED")) {
-		apr_table_setn(e, "SCRIPT_NAME", r->uri);
-		if (r->path_info && *r->path_info) {
-			apr_table_setn(e, "PATH_INFO", r->path_info);
-		}
-	}
-	else if (!r->path_info || !*r->path_info) {
-		apr_table_setn(e, "SCRIPT_NAME", r->uri);
-	}
-	else {
-		int path_info_start = ap_find_path_info(r->uri, r->path_info);
-
-		apr_table_setn(e, "SCRIPT_NAME",
-				apr_pstrndup(r->pool, r->uri, path_info_start));
-
-		apr_table_setn(e, "PATH_INFO", r->path_info);
-	}
-}
-
 static
 void add_pass_header_vars(fcgi_request *fr)
 {
@@ -207,10 +127,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 		ap_add_common_vars(r);
 		add_pass_header_vars(fr);
 
-		if (fr->role == FCGI_RESPONDER)
-			ap_add_cgi_vars(r);
-		else
-			add_auth_cgi_vars(r, fr->auth_compat);
+		ap_add_cgi_vars(r);
 
 		env->envp = ap_create_environment(r->pool, r->subprocess_env);
 		env->pass = PREP;

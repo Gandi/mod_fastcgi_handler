@@ -203,7 +203,6 @@ typedef struct {
     int exitStatusSet;
     unsigned int requestId;
     int eofSent;
-    int role;                       /* FastCGI Role: Authorizer or Responder */
     int dynamic;                    /* whether or not this is a dynamic app */
     struct timeval startTime;       /* dynamic app's connect() attempt start time */
     struct timeval queueTime;       /* dynamic app's connect() complete time */
