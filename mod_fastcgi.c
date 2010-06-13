@@ -2783,8 +2783,6 @@ static const command_rec fastcgi_cmds[] =
 
     AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_RAW_ARGS("FastCgiConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),
-
     AP_INIT_TAKE12("FastCgiAuthenticator", fcgi_config_new_auth_server,
         (void *)FCGI_AUTH_TYPE_AUTHENTICATOR, ACCESS_CONF,
         "a fastcgi-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
