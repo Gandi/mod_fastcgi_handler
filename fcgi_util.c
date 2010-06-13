@@ -15,20 +15,20 @@
 
 #include "unixd.h"
 
-uid_t 
+uid_t
 fcgi_util_get_server_uid(const server_rec * const s)
 {
     /* the main server's uid */
     return ap_user_id;
 }
 
-uid_t 
+uid_t
 fcgi_util_get_server_gid(const server_rec * const s)
 {
     /* the main server's gid */
     return ap_group_id;
 }
- 
+
 /*******************************************************************************
  * Compute printable MD5 hash. Pool p is used for scratch as well as for
  * allocating the hash - use temp storage, and dup it if you need to keep it.
@@ -77,7 +77,7 @@ fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
 /*******************************************************************************
  * Convert a hostname or IP address string to an in_addr struct.
  */
-static int 
+static int
 convert_string_to_in_addr(const char * const hostname, struct in_addr * const addr)
 {
     struct hostent *hp;
@@ -88,7 +88,7 @@ convert_string_to_in_addr(const char * const hostname, struct in_addr * const ad
 #if !defined(INADDR_NONE)
 #define INADDR_NONE APR_INADDR_NONE
 #endif
-    
+
     if (addr->s_addr == INADDR_NONE) {
         if ((hp = gethostbyname((char *)hostname)) == NULL)
             return -1;
@@ -140,7 +140,7 @@ fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
  * enabled with matching uid and gid.
  */
 fcgi_server *
-fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
+fcgi_util_fs_get_by_id(const char *ePath)
 {
     char path[FCGI_MAXPATH];
     fcgi_server *s;
@@ -179,7 +179,7 @@ fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
 
     ap_cpystrn(path, ePath, FCGI_MAXPATH);
     ap_no2slash(path);
-    
+
     for (s = fcgi_servers; s != NULL; s = s->next) {
         if (strcmp(s->fs_path, path) == 0) {
             return s;
@@ -188,8 +188,6 @@ fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
     return NULL;
 }
 
-
-
 /*******************************************************************************
  * Allocate a new FastCGI server record from pool p with default values.
  */
@@ -209,7 +207,7 @@ fcgi_util_fs_new(pool *p)
     s->directive = APP_CLASS_UNKNOWN;
     s->processPriority = FCGI_DEFAULT_PRIORITY;
     s->envp = &fcgi_empty_env;
-    
+
     s->listenFd = -2;
 
     return s;
@@ -218,39 +216,9 @@ fcgi_util_fs_new(pool *p)
 /*******************************************************************************
  * Add the server to the linked list of FastCGI servers.
  */
-void 
+void
 fcgi_util_fs_add(fcgi_server *s)
 {
     s->next = fcgi_servers;
     fcgi_servers = s;
-}
-
-/*******************************************************************************
- * Configure uid, gid, user, group, username for wrapper.
- */
-const char *
-fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid)
-{
-    return NULL;
-}
-
-/*******************************************************************************
- * Allocate an array of ServerProcess records.
- */
-ServerProcess *
-fcgi_util_fs_create_procs(pool *p, int num)
-{
-    int i;
-    ServerProcess *proc = (ServerProcess *)ap_pcalloc(p, sizeof(ServerProcess) * num);
-
-    for (i = 0; i < num; i++) {
-        proc[i].pid = 0;
-        proc[i].state = FCGI_READY_STATE;
-    }
-    return proc;
-}
-
-int fcgi_util_ticks(struct timeval * tv) 
-{
-    return gettimeofday(tv, NULL);
 }

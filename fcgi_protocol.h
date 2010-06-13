@@ -1,4 +1,4 @@
-/* 
+/*
  * $Id: fcgi_protocol.h,v 1.1 1999/02/09 03:08:02 roberts Exp $
  */
 
@@ -118,7 +118,7 @@ typedef struct {
 
 
 typedef struct {
-    unsigned char type;    
+    unsigned char type;
     unsigned char reserved[7];
 } FCGI_UnknownTypeBody;
 

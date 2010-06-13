@@ -27,7 +27,7 @@ static void fcgi_buf_check(Buffer *buf)
 #else
 #define fcgi_buf_check(a) ((void) 0)
 #endif
- 
+
 /*******************************************************************************
  * Reset buffer, losing any data that's in it.
  */
@@ -114,7 +114,7 @@ static int socket_send(int fd, char * buf, int len)
             ASSERT(errno != EAGAIN);
 #endif
         }
-    } 
+    }
     while (bytes_sent == -1 && errno == EINTR);
 
     return bytes_sent;
@@ -152,15 +152,15 @@ int fcgi_buf_socket_recv(Buffer *buf, SOCKET fd)
 #ifndef NO_WRITEV
 
     /* assume there is a readv() since there is a writev() */
-    if (len == buf->size - buf->length) 
+    if (len == buf->size - buf->length)
     {
 #endif
 
         len = socket_recv(fd, buf->end, len);
 
 #ifndef NO_WRITEV
-    } 
-    else 
+    }
+    else
     {
         /* the buffer is wrapped, use readv() */
         struct iovec vec[2];
@@ -213,15 +213,15 @@ int fcgi_buf_socket_send(Buffer *buf, SOCKET fd)
     len = min(buf->length, buf->data + buf->size - buf->begin);
 
 #ifndef NO_WRITEV
-    if (len == buf->length) 
+    if (len == buf->length)
     {
 #endif
 
         len = socket_send(fd, buf->begin, len);
 
 #ifndef NO_WRITEV
-    } 
-    else 
+    }
+    else
     {
         struct iovec vec[2];
 

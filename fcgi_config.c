@@ -124,7 +124,6 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
 {
     static int isSet = 0;
 
-
     uid_t uid = geteuid();
     gid_t gid = getegid();
 
@@ -151,7 +150,6 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
     fcgi_user_id = uid;
     fcgi_group_id = gid;
 
-
     return NULL;
 }
 
@@ -159,7 +157,7 @@ apcb_t fcgi_config_reset_globals(void* dummy)
 {
     fcgi_servers = NULL;
     fcgi_config_set_fcgi_uid_n_gid(0);
-    
+
     dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
 
     return APCB_OK;
@@ -195,8 +193,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     ap_no2slash(fs_path);
 
     /* See if we've already got one of these bettys configured */
-    s = fcgi_util_fs_get_by_id(fs_path, fcgi_util_get_server_uid(cmd->server),
-                               fcgi_util_get_server_gid(cmd->server));
+    s = fcgi_util_fs_get_by_id(fs_path);
     if (s != NULL) {
         return ap_psprintf(tp,
             "%s: redefinition of previously defined class \"%s\"", name, fs_path);

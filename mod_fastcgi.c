@@ -124,7 +124,7 @@ u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
  *
  *----------------------------------------------------------------------
  */
-static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog, 
+static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
                           apr_pool_t * tp, server_rec * s)
 {
     const char *err;
@@ -134,11 +134,11 @@ static apcb_t init_module(apr_pool_t * p, apr_pool_t * plog,
     ap_register_cleanup(p, NULL, fcgi_config_reset_globals, ap_null_cleanup);
     ap_unblock_alarms();
 
-    ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);    
+    ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);
 
     fcgi_config_set_fcgi_uid_n_gid(1);
 
-    /* keep these handy */
+    /* keep this for debugging */
     fcgi_apache_main_server = s;
 
     return APCB_OK;
@@ -239,12 +239,12 @@ static int set_nonblocking(const fcgi_request * fr, int nonblocking)
 static void close_connection_to_fs(fcgi_request *fr)
 {
 
-    if (fr->fd >= 0) 
+    if (fr->fd >= 0)
     {
         struct linger linger = {0, 0};
         set_nonblocking(fr, FALSE);
         /* abort the connection entirely */
-        setsockopt(fr->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger)); 
+        setsockopt(fr->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
         close(fr->fd);
         fr->fd = -1;
     }
@@ -457,11 +457,11 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
     ASSERT(len >= 0);
     ASSERT(BufferLength(fr->clientOutputBuffer) == 0);
-    
+
     if (BufferFree(fr->clientOutputBuffer) < len) {
         fr->clientOutputBuffer = fcgi_buf_new(r->pool, len);
     }
-    
+
     ASSERT(BufferFree(fr->clientOutputBuffer) >= len);
 
     if (len > 0) {
@@ -509,7 +509,7 @@ static int read_from_client_n_queue(fcgi_request *fr)
 
         if ((countRead = ap_get_client_block(fr->r, end, count)) < 0)
         {
-            /* set the header scan state to done to prevent logging an error 
+            /* set the header scan state to done to prevent logging an error
              * - hokey approach - probably should be using a unique value */
             fr->parseHeader = SCAN_CGI_FINISHED;
             return -1;
@@ -573,47 +573,14 @@ static int write_to_client(fcgi_request *fr)
     return OK;
 }
 
-static void 
-get_request_identity(request_rec * const r, 
-                     uid_t * const uid, 
-                     gid_t * const gid)
-{
-    ap_unix_identity_t * identity = ap_run_get_suexec_identity(r);
-    if (identity) 
-    {
-        *uid = identity->uid;
-        *gid = identity->gid;
-    }
-    else
-    {
-        *uid = 0;
-        *gid = 0;
-    }
-}
-
-/*******************************************************************************
- * Determine the user and group the wrapper should be called with.
- * Based on code in Apache's create_argv_cmd() (util_script.c).
- */
-static void set_uid_n_gid(request_rec *r, const char **user, const char **group)
-{
-    *user = "-";
-    *group = "-";
-}
-
 static void send_request_complete(fcgi_request *fr)
 {
-    if (fr->completeTime.tv_sec) 
+    if (fr->completeTime.tv_sec)
     {
         struct timeval qtime, rtime;
 
         timersub(&fr->queueTime, &fr->startTime, &qtime);
         timersub(&fr->completeTime, &fr->queueTime, &rtime);
-        
-        send_to_pm(FCGI_REQUEST_COMPLETE_JOB, fr->fs_path,
-            fr->user, fr->group,
-            qtime.tv_sec * 1000000 + qtime.tv_usec,
-            rtime.tv_sec * 1000000 + rtime.tv_usec);
     }
 }
 
@@ -644,7 +611,7 @@ static int open_connection_to_fs(fcgi_request *fr)
         ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
             "FastCGI: failed to connect to server \"%s\": "
             "socket() failed", fr->fs_path);
-        return FCGI_FAILED; 
+        return FCGI_FAILED;
     }
 
     if (fr->fd >= FD_SETSIZE) {
@@ -688,7 +655,7 @@ static int open_connection_to_fs(fcgi_request *fr)
     if (status == 0) {
         ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
             "FastCGI: failed to connect to server \"%s\": "
-            "connect() timed out (appConnTimeout=%dsec)", 
+            "connect() timed out (appConnTimeout=%dsec)",
             fr->fs_path, dynamicAppConnectTimeout);
         return FCGI_FAILED;
     }
@@ -720,7 +687,7 @@ static int open_connection_to_fs(fcgi_request *fr)
                 "select() failed (pending error)", fr->fs_path);
             return FCGI_FAILED;
         }
-    } 
+    }
     else {
         ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
             "FastCGI: failed to connect to server \"%s\": "
@@ -775,10 +742,9 @@ static apcb_t cleanup(void *data)
     return APCB_OK;
 }
 
-
 static int socket_io(fcgi_request * const fr)
 {
-    enum 
+    enum
     {
         STATE_SOCKET_NONE,
         STATE_ENV_SEND,
@@ -806,7 +772,7 @@ static int socket_io(fcgi_request * const fr)
     pool *rp = r->pool;
     int is_connected = 0;
 
-    if (fr->role == FCGI_RESPONDER) 
+    if (fr->role == FCGI_RESPONDER)
     {
         client_recv = (fr->expectingClientContent != 0);
     }
@@ -854,9 +820,9 @@ SERVER_SEND:
 
         case STATE_SERVER_SEND:
 
-            if (! is_connected) 
+            if (! is_connected)
             {
-                if (open_connection_to_fs(fr) != FCGI_OK) 
+                if (open_connection_to_fs(fr) != FCGI_OK)
                 {
                     ap_kill_timeout(r);
                     return HTTP_INTERNAL_SERVER_ERROR;
@@ -887,9 +853,9 @@ SERVER_SEND:
 
         case STATE_CLIENT_SEND:
 
-            if (client_send || ! BufferFree(fr->clientOutputBuffer)) 
+            if (client_send || ! BufferFree(fr->clientOutputBuffer))
             {
-                if (write_to_client(fr)) 
+                if (write_to_client(fr))
                 {
                     state = STATE_CLIENT_ERROR;
                     break;
@@ -940,18 +906,18 @@ SERVER_SEND:
             break;
         }
 
-        if (select_status == 0) 
+        if (select_status == 0)
         {
             /* select() timeout */
 
-            if (BufferLength(fr->clientOutputBuffer)) 
+            if (BufferLength(fr->clientOutputBuffer))
             {
                 if (fr->role == FCGI_RESPONDER)
                 {
                     client_send = TRUE;
                 }
             }
-            else 
+            else
             {
                 ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
                     "server \"%s\" aborted: idle timeout (%d sec)",
@@ -973,15 +939,15 @@ SERVER_SEND:
                 state = STATE_ERROR;
                 break;
             }
-        } 
+        }
 
-        if (FD_ISSET(fr->fd, &read_set)) 
+        if (FD_ISSET(fr->fd, &read_set))
         {
             /* recv from the server */
 
             rv = fcgi_buf_socket_recv(fr->serverInputBuffer, fr->fd);
 
-            if (rv < 0) 
+            if (rv < 0)
             {
                 ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
                     "\"%s\" aborted: read failed", fr->fs_path);
@@ -989,7 +955,7 @@ SERVER_SEND:
                 break;
             }
 
-            if (rv == 0) 
+            if (rv == 0)
             {
                 fr->keepReadingFromFcgiApp = FALSE;
                 state = STATE_CLIENT_SEND;
@@ -997,13 +963,13 @@ SERVER_SEND:
             }
         }
 
-        if (fcgi_protocol_dequeue(rp, fr)) 
+        if (fcgi_protocol_dequeue(rp, fr))
         {
             state = STATE_ERROR;
             break;
         }
-        
-        if (fr->parseHeader == SCAN_CGI_READING_HEADERS) 
+
+        if (fr->parseHeader == SCAN_CGI_READING_HEADERS)
         {
             const char * err = process_headers(r, fr);
             if (err)
@@ -1016,14 +982,14 @@ SERVER_SEND:
             }
         }
 
-        if (fr->exitStatusSet) 
+        if (fr->exitStatusSet)
         {
             fr->keepReadingFromFcgiApp = FALSE;
             state = STATE_CLIENT_SEND;
             break;
         }
     }
-    
+
     return (state == STATE_ERROR);
 }
 
@@ -1039,10 +1005,10 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 
     fcgi_protocol_queue_begin_request(fr);
 
-    if (fr->role == FCGI_RESPONDER) 
+    if (fr->role == FCGI_RESPONDER)
     {
         rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
-        if (rv != OK) 
+        if (rv != OK)
         {
             ap_kill_timeout(r);
             return rv;
@@ -1062,19 +1028,19 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     /* comm with the server is done */
     close_connection_to_fs(fr);
 
-    if (fr->role == FCGI_RESPONDER) 
+    if (fr->role == FCGI_RESPONDER)
     {
         sink_client_data(fr);
     }
 
     while (rv == 0 && (BufferLength(fr->serverInputBuffer) || BufferLength(fr->clientOutputBuffer)))
     {
-        if (fcgi_protocol_dequeue(rp, fr)) 
+        if (fcgi_protocol_dequeue(rp, fr))
         {
             rv = HTTP_INTERNAL_SERVER_ERROR;
         }
-    
-        if (fr->parseHeader == SCAN_CGI_READING_HEADERS) 
+
+        if (fr->parseHeader == SCAN_CGI_READING_HEADERS)
         {
             const char * err = process_headers(r, fr);
             if (err)
@@ -1086,9 +1052,9 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
             }
         }
 
-        if (fr->role == FCGI_RESPONDER) 
+        if (fr->role == FCGI_RESPONDER)
         {
-            if (write_to_client(fr)) 
+            if (write_to_client(fr))
             {
                 break;
             }
@@ -1099,11 +1065,11 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         }
     }
 
-    switch (fr->parseHeader) 
+    switch (fr->parseHeader)
     {
     case SCAN_CGI_FINISHED:
 
-        if (fr->role == FCGI_RESPONDER) 
+        if (fr->role == FCGI_RESPONDER)
         {
             /* RUSSIAN_APACHE requires rflush() over bflush() */
             ap_rflush(r);
@@ -1120,7 +1086,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 
         ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: incomplete headers "
             "(%d bytes) received from server \"%s\"", fr->header->nelts, fr->fs_path);
-        
+
         /* fall through */
 
     case SCAN_CGI_BAD_HEADER:
@@ -1133,30 +1099,26 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         ASSERT(0);
         rv = HTTP_INTERNAL_SERVER_ERROR;
     }
-   
+
     ap_kill_timeout(r);
     return rv;
 }
 
-static int 
-create_fcgi_request(request_rec * const r, 
-                    const char * const path, 
+static int
+create_fcgi_request(request_rec * const r,
+                    const char * const path,
                     fcgi_request ** const frP)
 {
     const char *fs_path;
     pool * const p = r->pool;
     fcgi_server *fs;
     fcgi_request * const fr = (fcgi_request *)ap_pcalloc(p, sizeof(fcgi_request));
-    uid_t uid;
-    gid_t gid;
 
     fs_path = path ? path : r->filename;
 
-    get_request_identity(r, &uid, &gid);
+    fs = fcgi_util_fs_get_by_id(fs_path);
 
-    fs = fcgi_util_fs_get_by_id(fs_path, uid, gid);
-
-    if (fs == NULL) 
+    if (fs == NULL)
     {
         ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
             "FastCGI: invalid server \"%s\": %s", fs_path, err);
@@ -1208,7 +1170,8 @@ create_fcgi_request(request_rec * const r,
 	fr->header = ap_make_array(p, 1, 1);
     }
 
-    set_uid_n_gid(r, &fr->user, &fr->group);
+    fr->user = "-";
+    fr->group = "-";
 
     *frP = fr;
 
@@ -1308,12 +1271,7 @@ static int content_handler(request_rec *r)
 static int
 fixups(request_rec * r)
 {
-    uid_t uid;
-    gid_t gid;
-
-    get_request_identity(r, &uid, &gid);
-
-    if (fcgi_util_fs_get_by_id(r->filename, uid, gid))
+    if (fcgi_util_fs_get_by_id(r->filename))
     {
         r->handler = FASTCGI_HANDLER_NAME;
         return OK;
@@ -1323,7 +1281,7 @@ fixups(request_rec * r)
 }
 
 
-static const command_rec fastcgi_cmds[] = 
+static const command_rec fastcgi_cmds[] =
 {
     AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
 
@@ -1336,7 +1294,7 @@ static void register_hooks(apr_pool_t * p)
     /* ap_hook_pre_config(x_pre_config, NULL, NULL, APR_HOOK_MIDDLE); */
     ap_hook_post_config(init_module, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(content_handler, NULL, NULL, APR_HOOK_MIDDLE);
-    ap_hook_fixups(fixups, NULL, NULL, APR_HOOK_MIDDLE); 
+    ap_hook_fixups(fixups, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
 module AP_MODULE_DECLARE_DATA fastcgi_module =

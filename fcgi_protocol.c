@@ -203,7 +203,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
     }
 
     while (*env->envp) {
-        switch (env->pass) 
+        switch (env->pass)
         {
         case PREP:
             env->equalPtr = strchr(*env->envp, '=');
@@ -373,7 +373,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                 /* We're gonna consume all thats here */
                 fr->dataLen -= len;
 
-                while (len > 0) 
+                while (len > 0)
                 {
                     char *null, *end, *start = fr->fs_stderr;
 
@@ -393,15 +393,15 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                             "discarding %d characters of stderr", fr->fs_path, discard);
                         start = null;
                         fr->fs_stderr_len -= discard;
-                    } 
+                    }
 
                     /* Print as much as possible  */
-                    while ((end = strpbrk(start, "\r\n"))) 
+                    while ((end = strpbrk(start, "\r\n")))
                     {
                         if (start != end)
                         {
                             *end = '\0';
-                            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r, 
+                            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
                                 "FastCGI: server \"%s\" stderr: %s", fr->fs_path, start);
                         }
                         end++;
@@ -410,7 +410,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                         start = end;
                     }
 
-                    if (fr->fs_stderr_len) 
+                    if (fr->fs_stderr_len)
                     {
                         if (start != fr->fs_stderr)
                         {
@@ -420,7 +420,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                         else if (fr->fs_stderr_len == FCGI_SERVER_MAX_STDERR_LINE_LEN)
                         {
                             /* Full buffer, dump it and complain */
-                            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r, 
+                            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
                                "FastCGI: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
                             ap_log_rerror(FCGI_LOG_WARN_NOERRNO, fr->r,
                                 "FastCGI: too much stderr received from server \"%s\", "

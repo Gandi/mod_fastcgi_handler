@@ -32,7 +32,7 @@
 typedef struct apr_array_header_t array_header;
 typedef struct apr_table_t table;
 typedef struct apr_pool_t pool;
-#define NET_SIZE_T apr_socklen_t 
+#define NET_SIZE_T apr_socklen_t
 
 typedef apr_status_t apcb_t;
 #define APCB_OK APR_SUCCESS
@@ -91,7 +91,7 @@ typedef apr_status_t apcb_t;
 #endif
 
 
-#ifndef NO_WRITEV 
+#ifndef NO_WRITEV
 #include <sys/uio.h>
 #endif
 
@@ -111,7 +111,7 @@ typedef struct {
 } Buffer;
 
 
-enum process_state { 
+enum process_state {
     FCGI_RUNNING_STATE,             /* currently running */
     FCGI_START_STATE,               /* needs to be started by PM */
     FCGI_VICTIM_STATE,              /* SIGTERM was sent by PM */
@@ -323,7 +323,7 @@ typedef struct {
  */
 typedef struct {
     enum { PREP, HEADER, NAME, VALUE } pass;
-    char **envp; 
+    char **envp;
     int headerLen, nameLen, valueLen, totalLen;
     char *equalPtr;
     unsigned char headerBuff[8];
@@ -382,14 +382,10 @@ const char *fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **sock
     int *socket_addr_len, const char *socket_path);
 const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
     int *socket_addr_len, const char *host, unsigned short port);
-fcgi_server *fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid);
+fcgi_server *fcgi_util_fs_get_by_id(const char *ePath);
 fcgi_server *fcgi_util_fs_get(const char *ePath, const char *user, const char *group);
 fcgi_server *fcgi_util_fs_new(pool *p);
 void fcgi_util_fs_add(fcgi_server *s);
-ServerProcess *fcgi_util_fs_create_procs(pool *p, int num);
-
-int fcgi_util_ticks(struct timeval *);
-
 
 uid_t fcgi_util_get_server_uid(const server_rec * const s);
 gid_t fcgi_util_get_server_gid(const server_rec * const s);

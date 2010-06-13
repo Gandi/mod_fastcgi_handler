@@ -21,7 +21,7 @@
 #define MAX_FAILED_STARTS 3
 
 /*
- * The number of seconds between attempts to start an application that 
+ * The number of seconds between attempts to start an application that
  * has been declared broken (see MAX_FAILED_STARTS).
  */
 #define FAILED_STARTS_DELAY 600
@@ -35,7 +35,7 @@
 #define MAX_INIT_ENV_VARS 64               /* max # of -initial-env options */
 
 /* max number of chars in a line of stderr we can handle from a FastCGI Server */
-#define FCGI_SERVER_MAX_STDERR_LINE_LEN 1023     
+#define FCGI_SERVER_MAX_STDERR_LINE_LEN 1023
 
 /* size of the buffer the PM uses to read records from the request handlers */
 #define FCGI_MSGS_BUFSIZE  32 * 512
@@ -75,12 +75,12 @@
                                             * seconds a server should wait in
                                             * attempt to connect to fcgi app
                                             * before sending FCGI_REQUEST_TIMEOUT_JOB */
-#define	FCGI_DEFAULT_MIN_SERVER_LIFE 30    /* the default minimum number of 
+#define	FCGI_DEFAULT_MIN_SERVER_LIFE 30    /* the default minimum number of
                                             * seconds a server must stay alive
                                             * before it's considered broken. */
 /*
- * # of sec to wait in a non-blocking connect() to the FastCGI application 
- * before aborting the request, or 0 to indicate that blocking connect()s 
+ * # of sec to wait in a non-blocking connect() to the FastCGI application
+ * before aborting the request, or 0 to indicate that blocking connect()s
  * should be used.  Non-blocking connect()s are problematic on many platforms.
  */
 #define FCGI_DEFAULT_APP_CONN_TIMEOUT 0
@@ -117,7 +117,7 @@
 
 /* FCGI_REQUEST_COMPLETE_JOB is the longest: id, path, user, gid, qtime, start */
 #define FCGI_MSG_CRAP  1 + 2 + MAX_USER_NAME_LEN + 1 + MAX_GID_CHAR_LEN + (2 * 11) + 3
- 
+
 #if defined(PIPE_BUF) && PIPE_BUF < FCGI_MAXPATH + FCGI_MSG_CRAP
 #define FCGI_MAX_MSG_LEN  PIPE_BUF
 #undef FCGI_MAXPATH
