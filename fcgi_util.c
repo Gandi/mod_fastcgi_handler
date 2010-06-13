@@ -46,14 +46,6 @@ fcgi_util_socket_hash_filename(pool *p, const char *path,
 }
 
 
- /*******************************************************************************
-  * Concat src1 and src2 using the approprate path seperator for the platform. 
-  */
-static char * make_full_path(pool *a, const char *src1, const char *src2)
-{
-    return ap_make_full_path(a, src1, src2);
-}
-
 /*******************************************************************************
  * Build a Domain Socket Address structure, and calculate its size.
  * The error message is allocated from the pool p.  If you don't want the
@@ -144,80 +136,6 @@ fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
 }
 
 /*******************************************************************************
- * Determine if a process with uid/gid can access a file with mode permissions.
- */
-const char *
-fcgi_util_check_access(pool *tp, 
-        const char * const path, const struct stat *statBuf, 
-        const int mode, const uid_t uid, const gid_t gid)
-{
-    struct stat myStatBuf;
-
-    if (statBuf == NULL) {    
-        if (stat(path, &myStatBuf) < 0)
-            return ap_psprintf(tp, "stat(%s) failed: %s", path, strerror(errno));
-        statBuf = &myStatBuf;
-    }
-    
-    /* If the uid owns the file, check the owner bits */
-    if (uid == statBuf->st_uid) {
-        if (mode & R_OK && !(statBuf->st_mode & S_IRUSR))
-            return "read not allowed by owner";
-        if (mode & W_OK && !(statBuf->st_mode & S_IWUSR))
-            return "write not allowed by owner";
-        if (mode & X_OK && !(statBuf->st_mode & S_IXUSR))
-            return "execute not allowed by owner";
-        return NULL;
-    }
-
-#if  !defined(__EMX__)
-    /* If the gid is same as the file's group, check the group bits */
-    if (gid == statBuf->st_gid) {
-        if (mode & R_OK && !(statBuf->st_mode & S_IRGRP))
-            return "read not allowed by group";
-        if (mode & W_OK && !(statBuf->st_mode & S_IWGRP))
-            return "write not allowed by group";
-        if (mode & X_OK && !(statBuf->st_mode & S_IXGRP))
-            return "execute not allowed by group";
-        return NULL;
-    }
-
-    /* Get the user membership for the file's group.  If the
-     * uid is a member, check the group bits. */
-    {
-        const struct group * const gr = getgrgid(statBuf->st_gid);
-        const struct passwd * const pw = getpwuid(uid);
-
-        if (gr != NULL && pw != NULL) {
-            char **user = gr->gr_mem;
-            for ( ; *user != NULL; user++) {
-                if (strcmp(*user, pw->pw_name) == 0) {
-                    if (mode & R_OK && !(statBuf->st_mode & S_IRGRP))
-                        return "read not allowed by group";
-                    if (mode & W_OK && !(statBuf->st_mode & S_IWGRP))
-                        return "write not allowed by group";
-                    if (mode & X_OK && !(statBuf->st_mode & S_IXGRP))
-                        return "execute not allowed by group";
-                    return NULL;
-                }
-            }
-        }
-    }
-    
-    /* That just leaves the other bits.. */
-    if (mode & R_OK && !(statBuf->st_mode & S_IROTH))
-        return "read not allowed";
-    if (mode & W_OK && !(statBuf->st_mode & S_IWOTH))
-        return "write not allowed";
-    if (mode & X_OK && !(statBuf->st_mode & S_IXOTH))
-        return "execute not allowed";
-#endif
-
-    return NULL;
-}
-
-
-/*******************************************************************************
  * Find a FastCGI server with a matching fs_path, and if fcgi_wrapper is
  * enabled with matching uid and gid.
  */
@@ -267,33 +185,6 @@ fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
             return s;
         }
     }
-    return NULL;
-}
-
-const char *
-fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat *finfo)
-{
-    const char *err;
-
-    if (finfo == NULL) {
-        finfo = (struct stat *)ap_palloc(p, sizeof(struct stat));	        
-        if (stat(fs_path, finfo) < 0)
-            return ap_psprintf(p, "stat(%s) failed: %s", fs_path, strerror(errno));
-    }
-    
-    if (finfo->st_mode == 0) 
-        return ap_psprintf(p, "script not found or unable to stat()");
-
-    if (S_ISDIR(finfo->st_mode)) 
-        return ap_psprintf(p, "script is a directory!");
-    
-    err = fcgi_util_check_access(p, fs_path, finfo, X_OK, fcgi_user_id, fcgi_group_id);
-    if (err) {
-        return ap_psprintf(p,
-            "access for server (uid %ld, gid %ld) not allowed: %s",
-            (long)fcgi_user_id, (long)fcgi_group_id, err);
-    }
-    
     return NULL;
 }
 
@@ -363,5 +254,3 @@ int fcgi_util_ticks(struct timeval * tv)
 {
     return gettimeofday(tv, NULL);
 }
-
-

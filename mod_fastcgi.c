@@ -107,7 +107,6 @@ fcgi_server *fcgi_servers = NULL;         /* AppClasses */
 char *fcgi_empty_env = NULL;
 
 u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-int dynamicFlush = FCGI_FLUSH;
 
 /*
  *----------------------------------------------------------------------
@@ -554,7 +553,7 @@ static int write_to_client(fcgi_request *fr)
     bkt = apr_bucket_transient_create(begin, count, bkt_alloc);
     APR_BRIGADE_INSERT_TAIL(bde, bkt);
 
-    if (fr->fs ? fr->fs->flush : dynamicFlush) 
+    if (fr->fs->flush)
     {
         bkt = apr_bucket_flush_create(bkt_alloc);
         APR_BRIGADE_INSERT_TAIL(bde, bkt);
@@ -1159,29 +1158,9 @@ create_fcgi_request(request_rec * const r,
 
     if (fs == NULL) 
     {
-        const char * err;
-        struct stat *my_finfo;
-
-        /* dynamic? */
-        
-        {
-            my_finfo = (struct stat *) ap_palloc(p, sizeof(struct stat));
-            
-            if (stat(fs_path, my_finfo) < 0) 
-            {
-                ap_log_rerror(FCGI_LOG_ERR_ERRNO, r, 
-                    "FastCGI: stat() of \"%s\" failed", fs_path);
-                return HTTP_NOT_FOUND;
-            }
-        }
-
-        err = fcgi_util_fs_is_path_ok(p, fs_path, my_finfo);
-        if (err) 
-        {
-            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, 
-                "FastCGI: invalid (dynamic) server \"%s\": %s", fs_path, err);
-            return HTTP_FORBIDDEN;
-        }
+        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
+            "FastCGI: invalid server \"%s\": %s", fs_path, err);
+        return HTTP_FORBIDDEN;
     }
 
     fr->nph = (strncmp(strrchr(fs_path, '/'), "/nph-", 5) == 0) ||

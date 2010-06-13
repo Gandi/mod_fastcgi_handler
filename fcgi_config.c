@@ -161,7 +161,6 @@ apcb_t fcgi_config_reset_globals(void* dummy)
     fcgi_config_set_fcgi_uid_n_gid(0);
     
     dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-	dynamicFlush = FCGI_FLUSH;
 
     return APCB_OK;
 }

@@ -382,12 +382,8 @@ const char *fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **sock
     int *socket_addr_len, const char *socket_path);
 const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
     int *socket_addr_len, const char *host, unsigned short port);
-const char *fcgi_util_check_access(pool *tp,
-    const char * const path, const struct stat *statBuf,
-    const int mode, const uid_t uid, const gid_t gid);
 fcgi_server *fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid);
 fcgi_server *fcgi_util_fs_get(const char *ePath, const char *user, const char *group);
-const char *fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat *finfo);
 fcgi_server *fcgi_util_fs_new(pool *p);
 void fcgi_util_fs_add(fcgi_server *s);
 ServerProcess *fcgi_util_fs_create_procs(pool *p, int num);
@@ -412,7 +408,6 @@ extern fcgi_server *fcgi_servers;
 extern char *fcgi_empty_env;
 
 extern u_int dynamicAppConnectTimeout;
-extern int dynamicFlush;
 
 
 extern module MODULE_VAR_EXPORT fastcgi_module;
