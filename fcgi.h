@@ -66,7 +66,6 @@ typedef struct _FastCgiServerInfo {
     char *fs_path;                  /* pathname of executable */
     apr_array_header_t *pass_headers;     /* names of headers to pass in the env */
     u_int idle_timeout;             /* fs idle secs allowed before aborting */
-    u_int listenQueueDepth;         /* size of listen queue for IPC */
     u_int appConnectTimeout;        /* timeout (sec) for connect() requests */
     u_int numProcesses;             /* max allowed processes of this class,
                                      * or for dynamic apps, the number of
@@ -75,13 +74,6 @@ typedef struct _FastCgiServerInfo {
     time_t restartTime;             /* most recent time when the process
                                      * manager started a process in this
                                      * class. */
-    int initStartDelay;             /* min number of seconds to wait between
-                                     * starting of AppClass processes at init */
-    u_int restartDelay;             /* number of seconds to wait between
-                                     * restarts after failure.  Can be zero. */
-    u_int minServerLife;            /* minimum number of seconds a server must
-                                     * live before it's considered borked. */
-    int restartOnExit;              /* = TRUE = restart. else terminate/free */
     u_int numFailures;              /* num restarts due to exit failure */
     int bad;                        /* is [not] having start problems */
     struct sockaddr *socket_addr;   /* Socket Address of FCGI app server class */
@@ -93,12 +85,6 @@ typedef struct _FastCgiServerInfo {
                                      * managed FastCGI applications or for
                                      * server managed FastCGI applications,
                                      * where server became application mngr. */
-    int listenFd;                   /* Listener socket of FCGI app server
-                                     * class.  Passed to app server process
-                                     * at process creation. */
-    u_int processPriority;          /* If locally server managed process,
-                                     * this is the priority to run the
-                                     * processes in this class at. */
     struct _FcgiProcessInfo *procs; /* Pointer to array of
                                      * processes belonging to this class. */
     int keepConnection;             /* = 1 = maintain connection to app. */
