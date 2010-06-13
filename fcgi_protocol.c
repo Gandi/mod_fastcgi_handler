@@ -227,7 +227,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
  * fr->header when parsing headers, to fr->fs_stderr when reading stderr data,
  * or to the client output buffer otherwises.
  */
-int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
+int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 {
 	FCGI_Header header;
 	int len;

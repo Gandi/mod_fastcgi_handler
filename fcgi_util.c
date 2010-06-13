@@ -21,7 +21,7 @@
  * struct sockaddr_un also allocated from p, pass it preallocated (!=NULL).
  */
 const char *
-fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
+fcgi_util_socket_make_domain_addr(apr_pool_t *p, struct sockaddr_un **socket_addr,
         int *socket_addr_len, const char *socket_path)
 {
     int socket_pathLen = strlen(socket_path);
@@ -79,7 +79,7 @@ convert_string_to_in_addr(const char * const hostname, struct in_addr * const ad
  * struct sockaddr_in also allocated from p, pass it preallocated (!=NULL).
  */
 const char *
-fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
+fcgi_util_socket_make_inet_addr(apr_pool_t *p, struct sockaddr_in **socket_addr,
         int *socket_addr_len, const char *host, unsigned short port)
 {
     if (*socket_addr == NULL)
@@ -140,7 +140,7 @@ fcgi_util_fs_get_by_id(const char *ePath)
  * Allocate a new FastCGI server record from pool p with default values.
  */
 fcgi_server *
-fcgi_util_fs_new(pool *p)
+fcgi_util_fs_new(apr_pool_t *p)
 {
     fcgi_server *s = (fcgi_server *) apr_pcalloc(p, sizeof(fcgi_server));
 

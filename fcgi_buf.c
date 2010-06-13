@@ -37,7 +37,7 @@ void fcgi_buf_reset(Buffer *buf)
 /*******************************************************************************
  * Allocate and intialize a new buffer of the specified size.
  */
-Buffer *fcgi_buf_new(pool *p, int size)
+Buffer *fcgi_buf_new(apr_pool_t *p, int size)
 {
 	Buffer *buf = apr_pcalloc(p, sizeof(Buffer) + size);
 	buf->size = size;

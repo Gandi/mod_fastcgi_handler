@@ -568,7 +568,7 @@ static int open_connection_to_fs(fcgi_request *fr)
     fd_set          write_fds, read_fds;
     int             status;
     request_rec * const r = fr->r;
-    pool * const rp = r->pool;
+    apr_pool_t * const rp = r->pool;
     const char *socket_path = NULL;
     struct sockaddr *socket_addr = NULL;
     int socket_addr_len = 0;
@@ -624,7 +624,7 @@ static int open_connection_to_fs(fcgi_request *fr)
     FD_SET(fr->fd, &write_fds);
     read_fds = write_fds;
 
-    status = ap_select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
+    status = select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
 
     if (status == 0) {
         ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
@@ -742,7 +742,7 @@ static int socket_io(fcgi_request * const fr)
     int rv;
     int client_send = FALSE;
     int client_recv = FALSE;
-    pool *rp = r->pool;
+    apr_pool_t *rp = r->pool;
     int is_connected = 0;
 
     client_recv = (fr->expectingClientContent != 0);
@@ -861,7 +861,7 @@ SERVER_SEND:
         }
 
         /* wait on the socket */
-        select_status = ap_select(nfds, &read_set, &write_set, NULL, &timeout);
+        select_status = select(nfds, &read_set, &write_set, NULL, &timeout);
 
         if (select_status < 0)
         {
@@ -963,7 +963,7 @@ SERVER_SEND:
 static int do_work(request_rec * const r, fcgi_request * const fr)
 {
     int rv;
-    pool *rp = r->pool;
+    apr_pool_t *rp = r->pool;
 
     fcgi_protocol_queue_begin_request(fr);
 
@@ -1052,7 +1052,7 @@ create_fcgi_request(request_rec * const r,
                     fcgi_request ** const frP)
 {
     const char *fs_path;
-    pool * const p = r->pool;
+    apr_pool_t * const p = r->pool;
     fcgi_server *fs;
     fcgi_request * const fr = (fcgi_request *)apr_pcalloc(p, sizeof(fcgi_request));
 

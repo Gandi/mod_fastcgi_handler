@@ -12,7 +12,7 @@
  * The pool arg should be persistant storage.
  */
 static
-const char *get_host_n_port(pool *p, const char **arg, const char **host,
+const char *get_host_n_port(apr_pool_t *p, const char **arg, const char **host,
 		u_short *port)
 {
 	char *cvptr, *portStr;
@@ -44,7 +44,7 @@ const char *get_host_n_port(pool *p, const char **arg, const char **host,
  * The pool arg should be temporary storage.
  */
 static
-const char *get_u_int(pool *p, const char **arg, u_int *num, u_int min)
+const char *get_u_int(apr_pool_t *p, const char **arg, u_int *num, u_int min)
 {
 	char *ptr;
 	const char *val = ap_getword_conf(p, arg);
@@ -61,7 +61,7 @@ const char *get_u_int(pool *p, const char **arg, u_int *num, u_int min)
 }
 
 static
-const char *get_pass_header(pool *p, const char **arg, apr_array_header_t **array)
+const char *get_pass_header(apr_pool_t *p, const char **arg, apr_array_header_t **array)
 {
 	const char **header;
 
@@ -79,7 +79,7 @@ const char *get_pass_header(pool *p, const char **arg, apr_array_header_t **arra
  * Return a "standard" message for common configuration errors.
  */
 static
-const char *invalid_value(pool *p, const char *cmd, const char *id, const char
+const char *invalid_value(apr_pool_t *p, const char *cmd, const char *id, const char
 		*opt, const char *err)
 {
 	return apr_psprintf(p, "%s%s%s: invalid value for %s: %s",
@@ -101,7 +101,7 @@ apr_status_t fcgi_config_reset_globals(void *dummy)
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg)
 {
 	fcgi_server *s;
-	pool * const p = cmd->pool, *tp = cmd->temp_pool;
+	apr_pool_t * const p = cmd->pool, *tp = cmd->temp_pool;
 	const char * const name = cmd->cmd->name;
 	const char *option, *err;
 

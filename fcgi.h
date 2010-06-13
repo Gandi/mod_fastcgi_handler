@@ -29,11 +29,6 @@
 #include "apr_strings.h"
 
 
-typedef struct apr_table_t table;
-typedef struct apr_pool_t pool;
-
-#define ap_select select
-
 #ifndef S_ISDIR
 #define S_ISDIR(m)      (((m)&(S_IFMT)) == (S_IFDIR))
 #endif
@@ -139,9 +134,9 @@ typedef struct {
     Buffer *serverOutputBuffer;  /* output buffer to FastCgi server */
     Buffer *clientInputBuffer;   /* client input buffer */
     Buffer *clientOutputBuffer;  /* client output buffer */
-    table *authHeaders;          /* headers received from an auth fs */
+    apr_table_t *authHeaders;          /* headers received from an auth fs */
     int auth_compat;             /* whether the auth request is spec compat */
-    table *saved_subprocess_env; /* subprocess_env before auth handling */
+    apr_table_t *saved_subprocess_env; /* subprocess_env before auth handling */
     int expectingClientContent;     /* >0 => more content, <=0 => no more */
     apr_array_header_t *header;
     char *fs_stderr;
@@ -224,7 +219,7 @@ apr_status_t fcgi_config_reset_globals(void * dummy);
 void fcgi_protocol_queue_begin_request(fcgi_request *fr);
 void fcgi_protocol_queue_client_buffer(fcgi_request *fr);
 int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr);
-int fcgi_protocol_dequeue(pool *p, fcgi_request *fr);
+int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr);
 
 /*
  * fcgi_buf.c
@@ -233,7 +228,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr);
 #define BufferFree(b)       ((b)->size - (b)->length)
 
 void fcgi_buf_reset(Buffer *bufPtr);
-Buffer *fcgi_buf_new(pool *p, int size);
+Buffer *fcgi_buf_new(apr_pool_t *p, int size);
 
 typedef int SOCKET;
 
@@ -256,12 +251,12 @@ void fcgi_buf_get_to_array(Buffer *buf, apr_array_header_t *arr, int len);
  * fcgi_util.c
  */
 
-const char *fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
+const char *fcgi_util_socket_make_domain_addr(apr_pool_t *p, struct sockaddr_un **socket_addr,
     int *socket_addr_len, const char *socket_path);
-const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
+const char *fcgi_util_socket_make_inet_addr(apr_pool_t *p, struct sockaddr_in **socket_addr,
     int *socket_addr_len, const char *host, unsigned short port);
 fcgi_server *fcgi_util_fs_get_by_id(const char *ePath);
-fcgi_server *fcgi_util_fs_new(pool *p);
+fcgi_server *fcgi_util_fs_new(apr_pool_t *p);
 void fcgi_util_fs_add(fcgi_server *s);
 
 /*
