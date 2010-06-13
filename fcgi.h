@@ -35,11 +35,6 @@ typedef struct apr_pool_t pool;
 
 #define ap_select select
 
-#define ap_user_id        unixd_config.user_id
-#define ap_group_id       unixd_config.group_id
-#define ap_user_name      unixd_config.user_name
-#define ap_suexec_enabled unixd_config.suexec_enabled
-
 #ifndef S_ISDIR
 #define S_ISDIR(m)      (((m)&(S_IFMT)) == (S_IFDIR))
 #endif
@@ -150,10 +145,6 @@ typedef struct _FastCgiServerInfo {
     int keepConnection;             /* = 1 = maintain connection to app. */
     uid_t uid;                      /* uid this app should run as (suexec) */
     gid_t gid;                      /* gid this app should run as (suexec) */
-    const char *username;           /* suexec user arg */
-    const char *group;              /* suexec group arg, AND used in comm
-                                     * between RH and PM */
-    const char *user;               /* used in comm between RH and PM */
     /* Dynamic FastCGI apps configuration parameters */
     u_long totalConnTime;           /* microseconds spent by the web server
                                      * waiting while fastcgi app performs
@@ -205,8 +196,6 @@ typedef struct {
     struct timeval queueTime;       /* dynamic app's connect() complete time */
     struct timeval completeTime;    /* dynamic app's connection close() time */
     int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
-    const char *user;               /* user used to invoke app (suexec) */
-    const char *group;              /* group used to invoke app (suexec) */
     int nph;
 } fcgi_request;
 
@@ -310,9 +299,6 @@ const char *fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket
 fcgi_server *fcgi_util_fs_get_by_id(const char *ePath);
 fcgi_server *fcgi_util_fs_new(pool *p);
 void fcgi_util_fs_add(fcgi_server *s);
-
-uid_t fcgi_util_get_server_uid(const server_rec * const s);
-gid_t fcgi_util_get_server_gid(const server_rec * const s);
 
 /*
  * Globals

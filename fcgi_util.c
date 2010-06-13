@@ -15,20 +15,6 @@
 
 #include "unixd.h"
 
-uid_t
-fcgi_util_get_server_uid(const server_rec * const s)
-{
-    /* the main server's uid */
-    return ap_user_id;
-}
-
-uid_t
-fcgi_util_get_server_gid(const server_rec * const s)
-{
-    /* the main server's gid */
-    return ap_group_id;
-}
-
 /*******************************************************************************
  * Build a Domain Socket Address structure, and calculate its size.
  * The error message is allocated from the pool p.  If you don't want the

@@ -1111,9 +1111,6 @@ create_fcgi_request(request_rec * const r,
 	fr->header = ap_make_array(p, 1, 1);
     }
 
-    fr->user = "-";
-    fr->group = "-";
-
     *frP = fr;
 
     return OK;
