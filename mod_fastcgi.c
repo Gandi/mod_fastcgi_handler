@@ -211,6 +211,7 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 	char *p = (char *)fr->header->elts;
 	int len = fr->header->nelts;
 	int flag = 0;
+	char *key, *value;
 
 	while (len-- && flag < 2) {
 		switch(*p) {
@@ -222,7 +223,7 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 			case '\0':
 			case '\v':
 			case '\f':
-				name = "Invalid Character";
+				key = "Invalid Character";
 				goto BadHeader;
 			default:
 				flag = 0;
@@ -243,7 +244,6 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 	hasContentType = hasStatus = hasLocation = FALSE;
 
 	char *next = (char *)fr->header->elts;
-	char *key, *value;
 
 	while(1) {
 		key = next;
@@ -930,7 +930,7 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 
 	if (fs == NULL) {
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
-				"FastCGI: invalid server \"%s\": %s", fs_path, err);
+				"FastCGI: invalid server: \"%s\"", fs_path);
 		return HTTP_FORBIDDEN;
 	}
 
@@ -1002,7 +1002,7 @@ int fcgi_pass_handler(request_rec *r)
 		return DECLINED;
 
 	/* setup a new FastCGI request */
-	if ((ret = create_fcgi_request(r, NULL, &fr))) {
+	if ((ret = create_fcgi_request(r, &fr))) {
 		return ret;
 	}
 
