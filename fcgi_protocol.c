@@ -36,14 +36,13 @@ void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
  * Build a FCGI_BeginRequest message body.
  */
 static
-void build_begin_request(unsigned char keepConnection,
-		FCGI_BeginRequestBody *body)
+void build_begin_request(FCGI_BeginRequestBody *body)
 {
 	unsigned int role = 1;
 	ASSERT((role >> 16) == 0);
 	body->roleB1 = (unsigned char) (role >>  8);
 	body->roleB0 = (unsigned char) role;
-	body->flags = (unsigned char) ((keepConnection) ? FCGI_KEEP_CONN : 0);
+	body->flags = (unsigned char) 0;
 	memset(body->reserved, 0, sizeof(body->reserved));
 }
 
@@ -58,7 +57,7 @@ void fcgi_protocol_queue_begin_request(fcgi_request *fr)
 	/* We should be the first ones to use this buffer */
 	ASSERT(BufferLength(fr->serverOutputBuffer) == 0);
 
-	build_begin_request(FALSE, &body);
+	build_begin_request(&body);
 	queue_header(fr, FCGI_BEGIN_REQUEST, bodySize);
 	fcgi_buf_add_block(fr->serverOutputBuffer, (char *) &body, bodySize);
 }
@@ -99,7 +98,7 @@ void build_env_header(int nameLen, int valueLen, unsigned char *headerBuffPtr,
 static
 void add_pass_header_vars(fcgi_request *fr)
 {
-	const apr_array_header_t *ph = fr->fs->pass_headers;
+	const apr_array_header_t *ph = fr->cfg->headers;
 
 	if (ph) {
 		const char **elt = (const char **)ph->elts;

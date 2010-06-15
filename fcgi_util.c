@@ -16,6 +16,7 @@
  * The error message is allocated from the pool p.  If you don't want the
  * struct sockaddr_un also allocated from p, pass it preallocated (!=NULL).
  */
+static
 const char *fcgi_util_socket_make_domain_addr(apr_pool_t *p,
 		struct sockaddr_un **socket_addr, int *socket_addr_len,
 		const char *socket_path)
@@ -43,30 +44,24 @@ const char *fcgi_util_socket_make_domain_addr(apr_pool_t *p,
  * Convert a hostname or IP address string to an in_addr struct.
  */
 static
-int convert_string_to_in_addr(const char * const hostname,
-		struct in_addr * const addr)
+int convert_string_to_in_addr(const char *hostname, struct in_addr *addr)
 {
-	struct hostent *hp;
-	int count;
+	if (inet_aton(hostname, addr) == 0) {
+		struct hostent *hp;
 
-	addr->s_addr = inet_addr((char *)hostname);
-
-#if !defined(INADDR_NONE)
-#define INADDR_NONE APR_INADDR_NONE
-#endif
-
-	if (addr->s_addr == INADDR_NONE) {
-		if ((hp = gethostbyname((char *)hostname)) == NULL)
+		if ((hp = gethostbyname(hostname)) == NULL)
 			return -1;
 
 		memcpy((char *) addr, hp->h_addr, hp->h_length);
-		count = 0;
+
+		int count = 0;
 		while (hp->h_addr_list[count] != 0)
 			count++;
 
-		return count;
+		return count == 1 ? 0 : -1;
 	}
-	return 1;
+
+	return 0;
 }
 
 /*******************************************************************************
@@ -74,6 +69,7 @@ int convert_string_to_in_addr(const char * const hostname,
  * The error message is allocated from the pool p. If you don't want the
  * struct sockaddr_in also allocated from p, pass it preallocated (!=NULL).
  */
+static
 const char *fcgi_util_socket_make_inet_addr(apr_pool_t *p,
 		struct sockaddr_in **socket_addr, int *socket_addr_len,
 		const char *host, unsigned short port)
@@ -86,18 +82,44 @@ const char *fcgi_util_socket_make_inet_addr(apr_pool_t *p,
 	(*socket_addr)->sin_family = AF_INET;
 	(*socket_addr)->sin_port = htons(port);
 
-	/* Get an in_addr represention of the host */
-	if (host != NULL) {
-		if (convert_string_to_in_addr(host, &(*socket_addr)->sin_addr) != 1) {
-			return apr_pstrcat(p, "failed to resolve \"", host,
-					"\" to exactly one IP address", NULL);
-		}
-	} else {
-		(*socket_addr)->sin_addr.s_addr = htonl(INADDR_ANY);
+	/* get an in_addr represention of the host */
+	if (convert_string_to_in_addr(host, &(*socket_addr)->sin_addr) == -1) {
+		return apr_pstrcat(p, "failed to resolve \"", host,
+				"\" to exactly one IP address", NULL);
 	}
 
 	*socket_addr_len = sizeof(struct sockaddr_in);
 	return NULL;
+}
+
+const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr, const
+		char *server)
+{
+	if (!server || !*server)
+		return apr_pstrdup(p, "empty");
+
+	if (*server == '/') {
+		return fcgi_util_socket_make_domain_addr(p,
+				(struct sockaddr_un **)&fr->socket_addr,
+				&fr->socket_addr_len, server);
+	}
+
+	const char *port_str = strchr(server, ':');
+
+	if (!port_str) {
+		return apr_pstrdup(p, "no port specified");
+	} else {
+		*port_str++ = '\0';
+	}
+
+	unsigned short port = atoi(port_str);
+
+	if (port <= 0)
+		return apr_pstrdup(p, "invalid port sepcified");
+
+	return fcgi_util_socket_make_inet_addr(p,
+			(struct sockaddr_in **)&fr->socket_addr,
+			&fr->socket_addr_len, server, port);
 }
 
 /*******************************************************************************
@@ -138,10 +160,6 @@ fcgi_server *fcgi_util_fs_get_by_id(const char *ePath)
 fcgi_server *fcgi_util_fs_new(apr_pool_t *p)
 {
 	fcgi_server *s = apr_pcalloc(p, sizeof(fcgi_server));
-
-	/* Initialize anything who's init state is not zeroizzzzed */
-	s->appConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-	s->idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 
 	return s;
 }

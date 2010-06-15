@@ -60,11 +60,7 @@ static
 apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
 		apr_pool_t * tp, server_rec * s)
 {
-	/* Register to reset to default values when the config pool is cleaned */
-	apr_pool_cleanup_register(p, NULL, fcgi_config_reset_globals, apr_pool_cleanup_null);
-
 	ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);
-
 	return APR_SUCCESS;
 }
 
@@ -460,26 +456,17 @@ int write_to_client(fcgi_request *fr)
 	 * reason) so the script can be released from having to wait around
 	 * for the transmission to the client to complete. */
 
-
 	bde = apr_brigade_create(fr->r->pool, bkt_alloc);
 	bkt = apr_bucket_transient_create(begin, count, bkt_alloc);
 	APR_BRIGADE_INSERT_TAIL(bde, bkt);
 
-	if (fr->fs->flush)
-	{
-		bkt = apr_bucket_flush_create(bkt_alloc);
-		APR_BRIGADE_INSERT_TAIL(bde, bkt);
-	}
-
 	rv = ap_pass_brigade(fr->r->output_filters, bde);
-
 
 	if (rv || fr->r->connection->aborted) {
 		ap_log_rerror(FCGI_LOG_INFO_NOERRNO, fr->r,
 				"FastCGI: client stopped connection before send body completed");
 		return -1;
 	}
-
 
 	fcgi_buf_toss(fr->clientOutputBuffer, count);
 	return OK;
@@ -502,8 +489,8 @@ int open_connection_to_fs(fcgi_request *fr)
 	const char *err = NULL;
 
 	/* Create the connection point */
-	socket_addr = fr->fs->socket_addr;
-	socket_addr_len = fr->fs->socket_addr_len;
+	socket_addr = fr->socket_addr;
+	socket_addr_len = fr->socket_addr_len;
 
 	/* Create the socket */
 	fr->fd = socket(socket_addr->sa_family, SOCK_STREAM, 0);
@@ -524,11 +511,6 @@ int open_connection_to_fs(fcgi_request *fr)
 		return FCGI_FAILED;
 	}
 
-	/* If appConnectTimeout is non-zero, setup do a non-blocking connect */
-	if (fr->fs->appConnectTimeout) {
-		set_nonblocking(fr, TRUE);
-	}
-
 	/* Connect */
 	if (connect(fr->fd, (struct sockaddr *)socket_addr, socket_addr_len) == 0)
 		goto ConnectionComplete;
@@ -545,7 +527,7 @@ int open_connection_to_fs(fcgi_request *fr)
 
 	errno = 0;
 
-	tval.tv_sec = fr->fs->appConnectTimeout;
+	tval.tv_sec = 0;
 	tval.tv_usec = 0;
 	FD_ZERO(&write_fds);
 	FD_SET(fr->fd, &write_fds);
@@ -557,7 +539,7 @@ int open_connection_to_fs(fcgi_request *fr)
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"connect() timed out (appConnTimeout=%dsec)",
-				fr->fs_path, fr->fs->appConnectTimeout);
+				fr->fs_path, 0);
 		return FCGI_FAILED;
 	}
 
@@ -597,11 +579,6 @@ int open_connection_to_fs(fcgi_request *fr)
 	}
 
 ConnectionComplete:
-	/* Return to blocking mode if it was set up */
-	if (fr->fs->appConnectTimeout) {
-		set_nonblocking(fr, FALSE);
-	}
-
 #ifdef TCP_NODELAY
 	if (socket_addr->sa_family == AF_INET) {
 		/* We shouldn't be sending small packets and there's no application
@@ -647,10 +624,13 @@ int socket_io(fcgi_request * const fr)
 	fd_set write_set;
 	int nfds = 0;
 	int select_status = 1;
-	int idle_timeout = fr->fs->idle_timeout;
 	int rv;
 	int client_send = FALSE;
 	int is_connected = 0;
+	int idle_timeout = fr->cfg->idle_timeout;
+
+	if (idle_timeout < 0)
+		idle_timeout = 0;
 
 	while (1) {
 		FD_ZERO(&read_set);
@@ -923,8 +903,6 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 {
 	apr_pool_t *p = r->pool;
 
-	fcgi_request *fr = apr_pcalloc(p, sizeof(fcgi_request));
-
 	const char *fs_path = r->filename;
 	fcgi_server *fs = fcgi_util_fs_get_by_id(fs_path);
 
@@ -933,6 +911,19 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 				"FastCGI: invalid server: \"%s\"", fs_path);
 		return HTTP_FORBIDDEN;
 	}
+
+	fcgi_request *fr = apr_pcalloc(p, sizeof(fcgi_request));
+
+	const char *server = r->handler + 5;
+	const char *err = fcgi_util_socket_make_addr(p, fr, server);
+
+	if (err) {
+		ap_log_rerror(FCGI_LOG_NOERRNO, r,
+				"fastcgi_pass: invalid server address: '%s'", server);
+		return HTTP_INTERNAL_SERVER_ERROR;
+	}
+
+	fr->cfg = ap_get_module_config(r->per_dir_config, &fastcgi_pass_module);
 
 	fr->serverInputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->serverOutputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
@@ -993,13 +984,13 @@ int post_process_for_redirects(request_rec * const r,
 }
 
 static
-int fcgi_pass_handler(request_rec *r)
+int fastcgi_pass_handler(request_rec *r)
 {
+	if (strncmp(r->handler, "fcgi:", 5))
+		return DECLINED;
+
 	fcgi_request *fr = NULL;
 	int ret;
-
-	if (strcmp(r->handler, FASTCGI_HANDLER_NAME))
-		return DECLINED;
 
 	/* setup a new FastCGI request */
 	if ((ret = create_fcgi_request(r, &fr))) {
@@ -1015,38 +1006,63 @@ int fcgi_pass_handler(request_rec *r)
 }
 
 static
-int fixups(request_rec * r)
+void *fastcgi_pass_create_dir_config(apr_pool_t *p, char *dir)
 {
-	if (fcgi_util_fs_get_by_id(r->filename)) {
-		r->handler = FASTCGI_HANDLER_NAME;
-		return OK;
-	}
+	fastcgi_pass_cfg *cfg = apr_pcalloc(p, sizeof(fastcgi_pass_cfg));
 
-	return DECLINED;
+	cfg->idle_timeout = -1;
+	cfg->headers = apr_array_make(p, 1, sizeof(char *));
+
+	return cfg;
 }
 
 static
-const command_rec fastcgi_cmds[] =
+void *fastcgi_pass_merge_dir_config(apr_pool_t *p, void *parent, void *current)
 {
-	AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
+	fastcgi_pass_cfg *parent_cfg = (fastcgi_pass_cfg *) parent;
+	fastcgi_pass_cfg *current_cfg = (fastcgi_pass_cfg *) current;
+	fastcgi_pass_cfg *cfg = apr_pcalloc(p, sizeof(fastcgi_pass_cfg));
+
+	cfg->idle_timeout = current->idle_timeout == -1 ?
+			parent->idle_timeout : current->idle_timeout;
+
+	cfg->headers = apr_array_append(p, parent->headers, current->headers);
+
+	return cfg;
+}
+
+static
+const char *fastcgi_pass_cmd_pass_header(cmd_parms *cmd, void *mconf,
+		const char *arg)
+{
+	fastcgi_pass_cfg *cfg = (fastcgi_pass_cfg *) mconf;
+	*(const char **)apr_array_push(cfg->headers) = arg;
+	return NULL;
+}
+
+static
+const command_rec fastcgi_pass_cmds[] =
+{
+	AP_INIT_ITERATE("FastCgiPassHeader", fastcgi_pass_cmd_pass_header,
+			OR_FILEINFO, "a list of headers to pass to the FastCGI application."),
+
 	{ NULL }
 };
 
 static
-void register_hooks(apr_pool_t * p)
+void fastcgi_pass_register_hooks(apr_pool_t * p)
 {
 	ap_hook_post_config(init_module, NULL, NULL, APR_HOOK_MIDDLE);
-	ap_hook_handler(fcgi_pass_handler, NULL, NULL, APR_HOOK_MIDDLE);
-	ap_hook_fixups(fixups, NULL, NULL, APR_HOOK_MIDDLE);
+	ap_hook_handler(fastcgi_pass_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
-module AP_MODULE_DECLARE_DATA fastcgi_module =
+module AP_MODULE_DECLARE_DATA fastcgi_pass_module =
 {
 	STANDARD20_MODULE_STUFF,
-	NULL,                           /* per-directory config creator */
-	NULL,                           /* dir config merger */
-	NULL,                           /* server config creator */
-	NULL,                           /* server config merger */
-	fastcgi_cmds,                   /* command table */
-	register_hooks,                 /* set up other request processing hooks */
+	fastcgi_pass_create_dir_config,
+	fastcgi_pass_merge_dir_config,
+	NULL,
+	NULL,
+	fastcgi_pass_cmds,
+	fastcgi_pass_register_hooks,
 };

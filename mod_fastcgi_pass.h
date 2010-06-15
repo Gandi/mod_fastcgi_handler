@@ -78,13 +78,6 @@
 #define	FCGI_DEFAULT_MIN_SERVER_LIFE 30    /* the default minimum number of
                                             * seconds a server must stay alive
                                             * before it's considered broken. */
-/*
- * # of sec to wait in a non-blocking connect() to the FastCGI application
- * before aborting the request, or 0 to indicate that blocking connect()s
- * should be used.  Non-blocking connect()s are problematic on many platforms.
- */
-#define FCGI_DEFAULT_APP_CONN_TIMEOUT 0
-
 #define FCGI_DEFAULT_PROCESS_SLACK 5       /* if this number combined with the
                                             * number of the currently running
                                             * processes exceeds dynamicMaxProcs, then
@@ -165,6 +158,11 @@
 #endif
 
 #define get_signal_text(a)  apr_signal_description_get(a)
+
+typedef struct {
+	int idle_timeout;
+	apr_array_header_t *headers;
+} fastcgi_pass_cfg;
 
 #endif	/* MOD_FASTCGI_H */
 

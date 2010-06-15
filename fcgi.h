@@ -62,44 +62,11 @@ typedef struct {
  * Web server's configuration.
  */
 typedef struct _FastCgiServerInfo {
-    int flush;
     char *fs_path;                  /* pathname of executable */
-    apr_array_header_t *pass_headers;     /* names of headers to pass in the env */
-    u_int idle_timeout;             /* fs idle secs allowed before aborting */
-    u_int appConnectTimeout;        /* timeout (sec) for connect() requests */
-    u_int numProcesses;             /* max allowed processes of this class,
-                                     * or for dynamic apps, the number of
-                                     * processes actually running */
     time_t startTime;               /* the time the application was started */
     time_t restartTime;             /* most recent time when the process
                                      * manager started a process in this
                                      * class. */
-    u_int numFailures;              /* num restarts due to exit failure */
-    int bad;                        /* is [not] having start problems */
-    struct sockaddr *socket_addr;   /* Socket Address of FCGI app server class */
-    int socket_addr_len;            /* Length of socket */
-    const char *socket_path;        /* Name used to create a socket */
-    const char *host;               /* Hostname for externally managed
-                                     * FastCGI application processes */
-    unsigned short port;            /* Port number either for externally
-                                     * managed FastCGI applications or for
-                                     * server managed FastCGI applications,
-                                     * where server became application mngr. */
-    struct _FcgiProcessInfo *procs; /* Pointer to array of
-                                     * processes belonging to this class. */
-    int keepConnection;             /* = 1 = maintain connection to app. */
-    uid_t uid;                      /* uid this app should run as (suexec) */
-    gid_t gid;                      /* gid this app should run as (suexec) */
-    /* Dynamic FastCGI apps configuration parameters */
-    u_long totalConnTime;           /* microseconds spent by the web server
-                                     * waiting while fastcgi app performs
-                                     * request processing since the last
-                                     * dynamicUpdateInterval */
-    u_long smoothConnTime;          /* exponentially decayed values of the
-                                     * connection times. */
-    u_long totalQueueTime;          /* microseconds spent by the web server
-                                     * waiting to connect to the fastcgi app
-                                     * since the last dynamicUpdateInterval. */
     struct _FastCgiServerInfo *next;
 } fcgi_server;
 
@@ -136,6 +103,10 @@ typedef struct {
     struct timeval queueTime;       /* dynamic app's connect() complete time */
     struct timeval completeTime;    /* dynamic app's connection close() time */
     int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
+
+    struct sockaddr *socket_addr;   /* Socket Address of FCGI app server class */
+    int socket_addr_len;            /* Length of socket struct */
+	fastcgi_pass_cfg *cfg;
 } fcgi_request;
 
 /* Values of parseHeader field */
@@ -188,12 +159,6 @@ typedef struct {
 } env_status;
 
 /*
- * fcgi_config.c
- */
-const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg);
-apr_status_t fcgi_config_reset_globals(void * dummy);
-
-/*
  * fcgi_protocol.c
  */
 void fcgi_protocol_queue_begin_request(fcgi_request *fr);
@@ -231,10 +196,7 @@ void fcgi_buf_get_to_array(Buffer *buf, apr_array_header_t *arr, int len);
  * fcgi_util.c
  */
 
-const char *fcgi_util_socket_make_domain_addr(apr_pool_t *p, struct sockaddr_un **socket_addr,
-    int *socket_addr_len, const char *socket_path);
-const char *fcgi_util_socket_make_inet_addr(apr_pool_t *p, struct sockaddr_in **socket_addr,
-    int *socket_addr_len, const char *host, unsigned short port);
+const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr, const char *server);
 fcgi_server *fcgi_util_fs_get_by_id(const char *ePath);
 fcgi_server *fcgi_util_fs_new(apr_pool_t *p);
 void fcgi_util_fs_add(fcgi_server *s);
