@@ -125,8 +125,8 @@ typedef struct {
 } env_status;
 
 /*******************************************************************************
- * Build and queue the environment name-value pairs.  Returns TRUE if the
- * complete ENV was buffered, FALSE otherwise.  Note: envp is updated to
+ * Build and queue the environment name-value pairs.  Returns 1 if the
+ * complete ENV was buffered, 0 otherwise.  Note: envp is updated to
  * reflect the current position in the ENV.
  */
 int fcgi_protocol_queue_env(fcgi_request *fr)
@@ -158,7 +158,7 @@ int fcgi_protocol_queue_env(fcgi_request *fr)
 
 		case HEADER:
 			if (fcgi_buf_free(fr->server_output_buffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
-				return (FALSE);
+				return (0);
 			}
 			queue_header(fr, FCGI_PARAMS, env->totalLen);
 			fcgi_buf_add_block(fr->server_output_buffer, (char *)env->headerBuff, env->headerLen);
@@ -170,7 +170,7 @@ int fcgi_protocol_queue_env(fcgi_request *fr)
 			if (charCount != env->nameLen) {
 				*env->envp += charCount;
 				env->nameLen -= charCount;
-				return (FALSE);
+				return (0);
 			}
 			env->pass = VALUE;
 			/* drop through */
@@ -180,7 +180,7 @@ int fcgi_protocol_queue_env(fcgi_request *fr)
 			if (charCount != env->valueLen) {
 				env->equalPtr += charCount;
 				env->valueLen -= charCount;
-				return (FALSE);
+				return (0);
 			}
 			env->pass = PREP;
 		}
@@ -188,12 +188,12 @@ int fcgi_protocol_queue_env(fcgi_request *fr)
 	}
 
 	if (fcgi_buf_free(fr->server_output_buffer) < sizeof(FCGI_Header)) {
-		return(FALSE);
+		return(0);
 	}
 
 	queue_header(fr, FCGI_PARAMS, 0);
 
-	return(TRUE);
+	return(1);
 }
 
 /*******************************************************************************
@@ -229,7 +229,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 			&& fcgi_buf_free(fr->server_output_buffer) >= sizeof(FCGI_Header))
 	{
 		queue_header(fr, FCGI_STDIN, 0);
-		fr->eofSent = TRUE;
+		fr->eofSent = 1;
 	}
 }
 
@@ -248,7 +248,7 @@ int fcgi_protocol_dequeue(fcgi_request *fr)
 		/*
 		 * State #1:  looking for the next complete packet header.
 		 */
-		if (fr->gotHeader == FALSE) {
+		if (fr->gotHeader == 0) {
 			if (fcgi_buf_length(fr->server_input_buffer) < sizeof(FCGI_Header)) {
 				return OK;
 			}
@@ -274,7 +274,7 @@ int fcgi_protocol_dequeue(fcgi_request *fr)
 			fr->packetType = header.type;
 			fr->dataLen = (header.contentLengthB1 << 8)
 				+ header.contentLengthB0;
-			fr->gotHeader = TRUE;
+			fr->gotHeader = 1;
 			fr->paddingLen = header.paddingLength;
 		}
 
@@ -387,7 +387,7 @@ int fcgi_protocol_dequeue(fcgi_request *fr)
 								fr->server, fr->dataLen, sizeof(FCGI_EndRequestBody));
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
-					fr->readingEndRequestBody = TRUE;
+					fr->readingEndRequestBody = 1;
 				}
 				if (len>0) {
 					fcgi_buf_get_to_buf(fr->erBufPtr, fr->server_input_buffer, len);
@@ -412,8 +412,8 @@ int fcgi_protocol_dequeue(fcgi_request *fr)
 						+ (erBody->appStatusB2 << 16)
 						+ (erBody->appStatusB1 <<  8)
 						+ (erBody->appStatusB0 );
-					fr->exitStatusSet = TRUE;
-					fr->readingEndRequestBody = FALSE;
+					fr->exitStatusSet = 1;
+					fr->readingEndRequestBody = 0;
 				}
 				break;
 			case FCGI_GET_VALUES_RESULT:
@@ -442,7 +442,7 @@ int fcgi_protocol_dequeue(fcgi_request *fr)
 				fr->paddingLen -= len;
 			}
 			if (fr->paddingLen == 0) {
-				fr->gotHeader = FALSE;
+				fr->gotHeader = 0;
 			}
 		}
 	} /* while */

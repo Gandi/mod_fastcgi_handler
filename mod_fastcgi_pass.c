@@ -50,7 +50,7 @@
  *      past the newline is returned.  NOTE: this condition supercedes
  *      the processing of RFC-822 continuation lines.
  *
- *      If continuation is set to 'TRUE', then it parses a (possible)
+ *      If continuation is set to '1', then it parses a (possible)
  *      sequence of RFC-822 continuation lines.
  *
  * Results:
@@ -125,7 +125,7 @@ void close_connection_to_fs(fcgi_request *fr)
 {
 	if (fr->socket_fd >= 0) {
 		struct linger linger = {0, 0};
-		set_nonblocking(fr, FALSE);
+		set_nonblocking(fr, 0);
 		/* abort the connection entirely */
 		setsockopt(fr->socket_fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
 		close(fr->socket_fd);
@@ -208,7 +208,7 @@ const char *process_headers(fcgi_request *fr)
 	fr->parseHeader = SCAN_CGI_FINISHED;
 
 	int hasContentType, hasStatus, hasLocation;
-	hasContentType = hasStatus = hasLocation = FALSE;
+	hasContentType = hasStatus = hasLocation = 0;
 
 	char *next = (char *)fr->header->elts;
 
@@ -255,7 +255,7 @@ const char *process_headers(fcgi_request *fr)
 				return apr_psprintf(r->pool, "invalid Status '%s'", value);
 			}
 
-			hasStatus = TRUE;
+			hasStatus = 1;
 			r->status = statusValue;
 			r->status_line = apr_pstrdup(r->pool, value);
 		}
@@ -265,7 +265,7 @@ const char *process_headers(fcgi_request *fr)
 				goto DuplicateNotAllowed;
 			}
 
-			hasContentType = TRUE;
+			hasContentType = 1;
 			r->content_type = apr_pstrdup(r->pool, value);
 		}
 
@@ -273,7 +273,7 @@ const char *process_headers(fcgi_request *fr)
 			if (hasLocation) {
 				goto DuplicateNotAllowed;
 			}
-			hasLocation = TRUE;
+			hasLocation = 1;
 			apr_table_set(r->headers_out, "Location", value);
 		}
 
@@ -602,7 +602,7 @@ SERVER_SEND:
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
 
-					set_nonblocking(fr, TRUE);
+					set_nonblocking(fr, 1);
 					nfds = fr->socket_fd + 1;
 				}
 
@@ -861,13 +861,13 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	fr->client_output_buffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->erBufPtr = fcgi_buf_new(p, sizeof(FCGI_EndRequestBody) + 1);
 
-	fr->gotHeader = FALSE;
+	fr->gotHeader = 0;
 	fr->stderr = NULL;
-	fr->readingEndRequestBody = FALSE;
+	fr->readingEndRequestBody = 0;
 	fr->exitStatus = 0;
-	fr->exitStatusSet = FALSE;
+	fr->exitStatusSet = 0;
 	fr->requestId = 1; /* anything but zero is OK here */
-	fr->eofSent = FALSE;
+	fr->eofSent = 0;
 	fr->should_client_block = 0;
 	fr->socket_fd = -1;
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
