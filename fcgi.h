@@ -55,7 +55,7 @@ typedef struct {
     char *begin;            /* begining of valid data */
     char *end;              /* end of valid data */
     char data[1];           /* buffer data */
-} Buffer;
+} fcgi_buf_t;
 
 /*
  * fcgi_request holds the state of a particular FastCGI request.
@@ -66,10 +66,10 @@ typedef struct {
     unsigned char packetType;       /* type of packet */
     int dataLen;                    /* length of data bytes */
     int paddingLen;                 /* record padding after content */
-    Buffer *server_input_buffer;   /* input buffer from FastCgi server */
-    Buffer *server_output_buffer;  /* output buffer to FastCgi server */
-    Buffer *client_input_buffer;   /* client input buffer */
-    Buffer *client_output_buffer;  /* client output buffer */
+    fcgi_buf_t *server_input_buffer;   /* input buffer from FastCgi server */
+    fcgi_buf_t *server_output_buffer;  /* output buffer to FastCgi server */
+    fcgi_buf_t *client_input_buffer;   /* client input buffer */
+    fcgi_buf_t *client_output_buffer;  /* client output buffer */
     int expectingClientContent;     /* >0 => more content, <=0 => no more */
     apr_array_header_t *header;
     char *stderr;
@@ -78,7 +78,7 @@ typedef struct {
     request_rec *r;
     int readingEndRequestBody;
     FCGI_EndRequestBody endRequestBody;
-    Buffer *erBufPtr;
+    fcgi_buf_t *erBufPtr;
     int exitStatus;
     int exitStatusSet;
     unsigned int requestId;
@@ -154,28 +154,28 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr);
 /*
  * fcgi_buf.c
  */
-#define BufferLength(b)     ((b)->length)
-#define BufferFree(b)       ((b)->size - (b)->length)
+#define fcgi_buf_length(b)     ((b)->length)
+#define fcgi_buf_free(b)       ((b)->size - (b)->length)
 
-void fcgi_buf_reset(Buffer *bufPtr);
-Buffer *fcgi_buf_new(apr_pool_t *p, int size);
+void fcgi_buf_reset(fcgi_buf_t *bufPtr);
+fcgi_buf_t *fcgi_buf_new(apr_pool_t *p, int size);
 
 typedef int SOCKET;
 
-int fcgi_buf_socket_recv(Buffer *b, SOCKET socket);
-int fcgi_buf_socket_send(Buffer *b, SOCKET socket);
+int fcgi_buf_socket_recv(fcgi_buf_t *b, SOCKET socket);
+int fcgi_buf_socket_send(fcgi_buf_t *b, SOCKET socket);
 
-void fcgi_buf_added(Buffer * const b, const unsigned int len);
-void fcgi_buf_removed(Buffer * const b, unsigned int len);
-void fcgi_buf_get_block_info(Buffer *bufPtr, char **beginPtr, int *countPtr);
-void fcgi_buf_toss(Buffer *bufPtr, int count);
-void fcgi_buf_get_free_block_info(Buffer *bufPtr, char **endPtr, int *countPtr);
-void fcgi_buf_add_update(Buffer *bufPtr, int count);
-int fcgi_buf_add_block(Buffer *bufPtr, char *data, int datalen);
-int fcgi_buf_add_string(Buffer *bufPtr, char *str);
-int fcgi_buf_get_to_block(Buffer *bufPtr, char *data, int datalen);
-void fcgi_buf_get_to_buf(Buffer *toPtr, Buffer *fromPtr, int len);
-void fcgi_buf_get_to_array(Buffer *buf, apr_array_header_t *arr, int len);
+void fcgi_buf_added(fcgi_buf_t * const b, const unsigned int len);
+void fcgi_buf_removed(fcgi_buf_t * const b, unsigned int len);
+void fcgi_buf_get_block_info(fcgi_buf_t *bufPtr, char **beginPtr, int *countPtr);
+void fcgi_buf_toss(fcgi_buf_t *bufPtr, int count);
+void fcgi_buf_get_free_block_info(fcgi_buf_t *bufPtr, char **endPtr, int *countPtr);
+void fcgi_buf_add_update(fcgi_buf_t *bufPtr, int count);
+int fcgi_buf_add_block(fcgi_buf_t *bufPtr, char *data, int datalen);
+int fcgi_buf_add_string(fcgi_buf_t *bufPtr, char *str);
+int fcgi_buf_get_to_block(fcgi_buf_t *bufPtr, char *data, int datalen);
+void fcgi_buf_get_to_buf(fcgi_buf_t *toPtr, fcgi_buf_t *fromPtr, int len);
+void fcgi_buf_get_to_array(fcgi_buf_t *buf, apr_array_header_t *arr, int len);
 
 /*
  * fcgi_util.c

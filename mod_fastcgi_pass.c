@@ -357,13 +357,13 @@ const char *process_headers(request_rec *r, fcgi_request *fr)
 	len = fr->header->nelts - (next - fr->header->elts);
 
 	ASSERT(len >= 0);
-	ASSERT(BufferLength(fr->client_output_buffer) == 0);
+	ASSERT(fcgi_buf_length(fr->client_output_buffer) == 0);
 
-	if (BufferFree(fr->client_output_buffer) < len) {
+	if (fcgi_buf_free(fr->client_output_buffer) < len) {
 		fr->client_output_buffer = fcgi_buf_new(r->pool, len);
 	}
 
-	ASSERT(BufferFree(fr->client_output_buffer) >= len);
+	ASSERT(fcgi_buf_free(fr->client_output_buffer) >= len);
 
 	if (len > 0) {
 		int sent;
@@ -399,7 +399,7 @@ int read_from_client_n_queue(fcgi_request *fr)
 	int count;
 	long int countRead;
 
-	while (BufferFree(fr->client_input_buffer) > 0 || BufferFree(fr->server_output_buffer) > 0) {
+	while (fcgi_buf_free(fr->client_input_buffer) > 0 || fcgi_buf_free(fr->server_output_buffer) > 0) {
 		fcgi_protocol_queue_client_buffer(fr);
 
 		if (fr->expectingClientContent <= 0)
@@ -665,7 +665,7 @@ SERVER_SEND:
 					nfds = fr->fd + 1;
 				}
 
-				if (BufferLength(fr->server_output_buffer)) {
+				if (fcgi_buf_length(fr->server_output_buffer)) {
 					FD_SET(fr->fd, &write_set);
 				} else {
 					ASSERT(fr->eofSent);
@@ -679,7 +679,7 @@ SERVER_SEND:
 				/* fall through */
 
 			case STATE_CLIENT_SEND:
-				if (client_send || ! BufferFree(fr->client_output_buffer)) {
+				if (client_send || ! fcgi_buf_free(fr->client_output_buffer)) {
 					if (write_to_client(fr)) {
 						state = STATE_CLIENT_ERROR;
 						break;
@@ -706,7 +706,7 @@ SERVER_SEND:
 
 		struct timeval timeout;
 
-		if (BufferLength(fr->client_output_buffer)) {
+		if (fcgi_buf_length(fr->client_output_buffer)) {
 			/* don't let client data sit too long, it might be a push */
 			timeout.tv_sec = 0;
 			timeout.tv_usec = 100000;
@@ -728,7 +728,7 @@ SERVER_SEND:
 		if (select_status == 0) {
 			/* select() timeout */
 
-			if (BufferLength(fr->client_output_buffer)) {
+			if (fcgi_buf_length(fr->client_output_buffer)) {
 				client_send = TRUE;
 			} else {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
@@ -840,7 +840,7 @@ int do_work(request_rec *r, fcgi_request *fr)
 
 	sink_client_data(fr);
 
-	while (rv == 0 && (BufferLength(fr->server_input_buffer) || BufferLength(fr->client_output_buffer))) {
+	while (rv == 0 && (fcgi_buf_length(fr->server_input_buffer) || fcgi_buf_length(fr->client_output_buffer))) {
 		if (fcgi_protocol_dequeue(rp, fr)) {
 			rv = HTTP_INTERNAL_SERVER_ERROR;
 		}

@@ -16,7 +16,7 @@ void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
 	ASSERT(type > 0);
 	ASSERT(type <= FCGI_MAXTYPE);
 	ASSERT(len <= 0xffff);
-	ASSERT(BufferFree(fr->server_output_buffer) >= sizeof(FCGI_Header));
+	ASSERT(fcgi_buf_free(fr->server_output_buffer) >= sizeof(FCGI_Header));
 
 	/* Assemble and queue the packet header. */
 	header.version = FCGI_VERSION;
@@ -55,7 +55,7 @@ void fcgi_protocol_queue_begin_request(fcgi_request *fr)
 	int bodySize = sizeof(FCGI_BeginRequestBody);
 
 	/* We should be the first ones to use this buffer */
-	ASSERT(BufferLength(fr->server_output_buffer) == 0);
+	ASSERT(fcgi_buf_length(fr->server_output_buffer) == 0);
 
 	build_begin_request(&body);
 	queue_header(fr, FCGI_BEGIN_REQUEST, bodySize);
@@ -145,7 +145,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
 			/* drop through */
 
 		case HEADER:
-			if (BufferFree(fr->server_output_buffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
+			if (fcgi_buf_free(fr->server_output_buffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
 				return (FALSE);
 			}
 			queue_header(fr, FCGI_PARAMS, env->totalLen);
@@ -175,7 +175,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
 		++env->envp;
 	}
 
-	if (BufferFree(fr->server_output_buffer) < sizeof(FCGI_Header)) {
+	if (fcgi_buf_free(fr->server_output_buffer) < sizeof(FCGI_Header)) {
 		return(FALSE);
 	}
 
@@ -201,8 +201,8 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 	 * of data in the output buffer (after protocol overhead), then
 	 * move some data to the output buffer.
 	 */
-	in_len = BufferLength(fr->client_input_buffer);
-	out_free = max(0, BufferFree(fr->server_output_buffer) - sizeof(FCGI_Header));
+	in_len = fcgi_buf_length(fr->client_input_buffer);
+	out_free = max(0, fcgi_buf_free(fr->server_output_buffer) - sizeof(FCGI_Header));
 	movelen = min(in_len, out_free);
 	if (movelen > 0) {
 		queue_header(fr, FCGI_STDIN, movelen);
@@ -214,7 +214,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 	 * in the output buffer, indicate EOF.
 	 */
 	if (movelen == in_len && fr->expectingClientContent <= 0
-			&& BufferFree(fr->server_output_buffer) >= sizeof(FCGI_Header))
+			&& fcgi_buf_free(fr->server_output_buffer) >= sizeof(FCGI_Header))
 	{
 		queue_header(fr, FCGI_STDIN, 0);
 		fr->eofSent = TRUE;
@@ -231,12 +231,12 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 	FCGI_Header header;
 	int len;
 
-	while (BufferLength(fr->server_input_buffer) > 0) {
+	while (fcgi_buf_length(fr->server_input_buffer) > 0) {
 		/*
 		 * State #1:  looking for the next complete packet header.
 		 */
 		if (fr->gotHeader == FALSE) {
-			if (BufferLength(fr->server_input_buffer) < sizeof(FCGI_Header)) {
+			if (fcgi_buf_length(fr->server_input_buffer) < sizeof(FCGI_Header)) {
 				return OK;
 			}
 			fcgi_buf_get_to_block(fr->server_input_buffer, (char *) &header,
@@ -268,7 +268,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 		/*
 		 * State #2:  got a header, and processing packet bytes.
 		 */
-		len = min(fr->dataLen, BufferLength(fr->server_input_buffer));
+		len = min(fr->dataLen, fcgi_buf_length(fr->server_input_buffer));
 		ASSERT(len >= 0);
 		switch (fr->packetType) {
 			case FCGI_STDOUT:
@@ -278,7 +278,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 							fcgi_buf_get_to_array(fr->server_input_buffer, fr->header, len);
 							break;
 						case SCAN_CGI_FINISHED:
-							len = min(BufferFree(fr->client_output_buffer), len);
+							len = min(fcgi_buf_free(fr->client_output_buffer), len);
 							if (len > 0) {
 								fcgi_buf_get_to_buf(fr->client_output_buffer, fr->server_input_buffer, len);
 							} else {
@@ -424,7 +424,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 		if (fr->dataLen == 0) {
 			if (fr->paddingLen > 0) {
 				len = min(fr->paddingLen,
-						BufferLength(fr->server_input_buffer));
+						fcgi_buf_length(fr->server_input_buffer));
 				fcgi_buf_toss(fr->server_input_buffer, len);
 				fr->paddingLen -= len;
 			}
