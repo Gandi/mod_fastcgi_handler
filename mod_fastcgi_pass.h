@@ -4,6 +4,8 @@
 /* max number of chars in a line of stderr we can handle from a FastCGI Server */
 #define FCGI_SERVER_MAX_STDERR_LINE_LEN 1023
 
+#define FCGI_DEFAULT_IDLE_TIMEOUT 30
+
 #define SERVER_BUFSIZE 8192
 
 #ifndef SUN_LEN
