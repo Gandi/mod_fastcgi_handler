@@ -896,29 +896,32 @@ static
 int create_fcgi_request(request_rec *r, fcgi_request **frP)
 {
 	apr_pool_t *p = r->pool;
-
 	fcgi_request *fr = apr_pcalloc(p, sizeof(fcgi_request));
 
-	const char *server = r->handler + 5;
-	const char *err = fcgi_util_socket_make_addr(p, fr, server);
+	/* setup server socket struct */
+	fr->server = apr_pstrdup(p, r->handler + 5);
+
+	const char *err = fcgi_util_socket_make_addr(p, fr);
 
 	if (err) {
 		ap_log_rerror(FCGI_LOG_NOERRNO, r,
-				"fastcgi_pass: invalid server address: '%s'", server);
+				"fastcgi_pass: invalid server address: '%s'", fr->server);
 		return HTTP_INTERNAL_SERVER_ERROR;
 	}
 
+	/* keep a pointer to cfg and r for convenience */
 	fr->cfg = ap_get_module_config(r->per_dir_config, &fastcgi_pass_module);
-	fr->server = server;
+	fr->r = r;
 
+	/* setup FastCGI buffers */
 	fr->serverInputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->serverOutputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->clientInputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->clientOutputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->erBufPtr = fcgi_buf_new(p, sizeof(FCGI_EndRequestBody) + 1);
+
 	fr->gotHeader = FALSE;
 	fr->fs_stderr = NULL;
-	fr->r = r;
 	fr->readingEndRequestBody = FALSE;
 	fr->exitStatus = 0;
 	fr->exitStatusSet = FALSE;

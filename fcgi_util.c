@@ -92,19 +92,18 @@ const char *fcgi_util_socket_make_inet_addr(apr_pool_t *p,
 	return NULL;
 }
 
-const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr, const
-		char *server)
+const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr)
 {
-	if (!server || !*server)
+	if (!fr->server || !*fr->server)
 		return apr_pstrdup(p, "empty");
 
-	if (*server == '/') {
+	if (*fr->server == '/') {
 		return fcgi_util_socket_make_domain_addr(p,
 				(struct sockaddr_un **)&fr->socket_addr,
-				&fr->socket_addr_len, server);
+				&fr->socket_addr_len, fr->server);
 	}
 
-	const char *port_str = strchr(server, ':');
+	const char *port_str = strchr(fr->server, ':');
 
 	if (!port_str) {
 		return apr_pstrdup(p, "no port specified");
@@ -119,5 +118,5 @@ const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr, const
 
 	return fcgi_util_socket_make_inet_addr(p,
 			(struct sockaddr_in **)&fr->socket_addr,
-			&fr->socket_addr_len, server, port);
+			&fr->socket_addr_len, fr->server, port);
 }
