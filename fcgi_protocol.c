@@ -16,7 +16,7 @@ void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
 	ASSERT(type > 0);
 	ASSERT(type <= FCGI_MAXTYPE);
 	ASSERT(len <= 0xffff);
-	ASSERT(BufferFree(fr->serverOutputBuffer) >= sizeof(FCGI_Header));
+	ASSERT(BufferFree(fr->server_output_buffer) >= sizeof(FCGI_Header));
 
 	/* Assemble and queue the packet header. */
 	header.version = FCGI_VERSION;
@@ -28,7 +28,7 @@ void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
 	header.paddingLength = 0;
 	header.reserved = 0;
 
-	fcgi_buf_add_block(fr->serverOutputBuffer, (char *) &header,
+	fcgi_buf_add_block(fr->server_output_buffer, (char *) &header,
 			sizeof(FCGI_Header));
 }
 
@@ -55,11 +55,11 @@ void fcgi_protocol_queue_begin_request(fcgi_request *fr)
 	int bodySize = sizeof(FCGI_BeginRequestBody);
 
 	/* We should be the first ones to use this buffer */
-	ASSERT(BufferLength(fr->serverOutputBuffer) == 0);
+	ASSERT(BufferLength(fr->server_output_buffer) == 0);
 
 	build_begin_request(&body);
 	queue_header(fr, FCGI_BEGIN_REQUEST, bodySize);
-	fcgi_buf_add_block(fr->serverOutputBuffer, (char *) &body, bodySize);
+	fcgi_buf_add_block(fr->server_output_buffer, (char *) &body, bodySize);
 }
 
 /*******************************************************************************
@@ -145,16 +145,16 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
 			/* drop through */
 
 		case HEADER:
-			if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
+			if (BufferFree(fr->server_output_buffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
 				return (FALSE);
 			}
 			queue_header(fr, FCGI_PARAMS, env->totalLen);
-			fcgi_buf_add_block(fr->serverOutputBuffer, (char *)env->headerBuff, env->headerLen);
+			fcgi_buf_add_block(fr->server_output_buffer, (char *)env->headerBuff, env->headerLen);
 			env->pass = NAME;
 			/* drop through */
 
 		case NAME:
-			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, *env->envp, env->nameLen);
+			charCount = fcgi_buf_add_block(fr->server_output_buffer, *env->envp, env->nameLen);
 			if (charCount != env->nameLen) {
 				*env->envp += charCount;
 				env->nameLen -= charCount;
@@ -164,7 +164,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
 			/* drop through */
 
 		case VALUE:
-			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
+			charCount = fcgi_buf_add_block(fr->server_output_buffer, env->equalPtr, env->valueLen);
 			if (charCount != env->valueLen) {
 				env->equalPtr += charCount;
 				env->valueLen -= charCount;
@@ -175,7 +175,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
 		++env->envp;
 	}
 
-	if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGI_Header)) {
+	if (BufferFree(fr->server_output_buffer) < sizeof(FCGI_Header)) {
 		return(FALSE);
 	}
 
@@ -201,12 +201,12 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 	 * of data in the output buffer (after protocol overhead), then
 	 * move some data to the output buffer.
 	 */
-	in_len = BufferLength(fr->clientInputBuffer);
-	out_free = max(0, BufferFree(fr->serverOutputBuffer) - sizeof(FCGI_Header));
+	in_len = BufferLength(fr->client_input_buffer);
+	out_free = max(0, BufferFree(fr->server_output_buffer) - sizeof(FCGI_Header));
 	movelen = min(in_len, out_free);
 	if (movelen > 0) {
 		queue_header(fr, FCGI_STDIN, movelen);
-		fcgi_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
+		fcgi_buf_get_to_buf(fr->server_output_buffer, fr->client_input_buffer, movelen);
 	}
 
 	/*
@@ -214,7 +214,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 	 * in the output buffer, indicate EOF.
 	 */
 	if (movelen == in_len && fr->expectingClientContent <= 0
-			&& BufferFree(fr->serverOutputBuffer) >= sizeof(FCGI_Header))
+			&& BufferFree(fr->server_output_buffer) >= sizeof(FCGI_Header))
 	{
 		queue_header(fr, FCGI_STDIN, 0);
 		fr->eofSent = TRUE;
@@ -231,15 +231,15 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 	FCGI_Header header;
 	int len;
 
-	while (BufferLength(fr->serverInputBuffer) > 0) {
+	while (BufferLength(fr->server_input_buffer) > 0) {
 		/*
 		 * State #1:  looking for the next complete packet header.
 		 */
 		if (fr->gotHeader == FALSE) {
-			if (BufferLength(fr->serverInputBuffer) < sizeof(FCGI_Header)) {
+			if (BufferLength(fr->server_input_buffer) < sizeof(FCGI_Header)) {
 				return OK;
 			}
-			fcgi_buf_get_to_block(fr->serverInputBuffer, (char *) &header,
+			fcgi_buf_get_to_block(fr->server_input_buffer, (char *) &header,
 					sizeof(FCGI_Header));
 			/*
 			 * XXX: Better handling of packets with other version numbers
@@ -268,26 +268,26 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 		/*
 		 * State #2:  got a header, and processing packet bytes.
 		 */
-		len = min(fr->dataLen, BufferLength(fr->serverInputBuffer));
+		len = min(fr->dataLen, BufferLength(fr->server_input_buffer));
 		ASSERT(len >= 0);
 		switch (fr->packetType) {
 			case FCGI_STDOUT:
 				if (len > 0) {
 					switch(fr->parseHeader) {
 						case SCAN_CGI_READING_HEADERS:
-							fcgi_buf_get_to_array(fr->serverInputBuffer, fr->header, len);
+							fcgi_buf_get_to_array(fr->server_input_buffer, fr->header, len);
 							break;
 						case SCAN_CGI_FINISHED:
-							len = min(BufferFree(fr->clientOutputBuffer), len);
+							len = min(BufferFree(fr->client_output_buffer), len);
 							if (len > 0) {
-								fcgi_buf_get_to_buf(fr->clientOutputBuffer, fr->serverInputBuffer, len);
+								fcgi_buf_get_to_buf(fr->client_output_buffer, fr->server_input_buffer, len);
 							} else {
 								return OK;
 							}
 							break;
 						default:
 							/* Toss data on the floor */
-							fcgi_buf_removed(fr->serverInputBuffer, len);
+							fcgi_buf_removed(fr->server_input_buffer, len);
 							break;
 					}
 					fr->dataLen -= len;
@@ -310,7 +310,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 
 					/* Get as much as will fit in the buffer */
 					int get_len = min(len, FCGI_SERVER_MAX_STDERR_LINE_LEN - fr->stderr_len);
-					fcgi_buf_get_to_block(fr->serverInputBuffer, start + fr->stderr_len, get_len);
+					fcgi_buf_get_to_block(fr->server_input_buffer, start + fr->stderr_len, get_len);
 					len -= get_len;
 					fr->stderr_len += get_len;
 					*(start + fr->stderr_len) = '\0';
@@ -377,7 +377,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 					fr->readingEndRequestBody = TRUE;
 				}
 				if (len>0) {
-					fcgi_buf_get_to_buf(fr->erBufPtr, fr->serverInputBuffer, len);
+					fcgi_buf_get_to_buf(fr->erBufPtr, fr->server_input_buffer, len);
 					fr->dataLen -= len;
 				}
 				if (fr->dataLen == 0) {
@@ -412,7 +412,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 				 * XXX Ignore unknown packet types from the FastCGI server.
 				 */
 			default:
-				fcgi_buf_toss(fr->serverInputBuffer, len);
+				fcgi_buf_toss(fr->server_input_buffer, len);
 				fr->dataLen -= len;
 				break;
 		} /* switch */
@@ -424,8 +424,8 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 		if (fr->dataLen == 0) {
 			if (fr->paddingLen > 0) {
 				len = min(fr->paddingLen,
-						BufferLength(fr->serverInputBuffer));
-				fcgi_buf_toss(fr->serverInputBuffer, len);
+						BufferLength(fr->server_input_buffer));
+				fcgi_buf_toss(fr->server_input_buffer, len);
 				fr->paddingLen -= len;
 			}
 			if (fr->paddingLen == 0) {

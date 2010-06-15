@@ -66,10 +66,10 @@ typedef struct {
     unsigned char packetType;       /* type of packet */
     int dataLen;                    /* length of data bytes */
     int paddingLen;                 /* record padding after content */
-    Buffer *serverInputBuffer;   /* input buffer from FastCgi server */
-    Buffer *serverOutputBuffer;  /* output buffer to FastCgi server */
-    Buffer *clientInputBuffer;   /* client input buffer */
-    Buffer *clientOutputBuffer;  /* client output buffer */
+    Buffer *server_input_buffer;   /* input buffer from FastCgi server */
+    Buffer *server_output_buffer;  /* output buffer to FastCgi server */
+    Buffer *client_input_buffer;   /* client input buffer */
+    Buffer *client_output_buffer;  /* client output buffer */
     int expectingClientContent;     /* >0 => more content, <=0 => no more */
     apr_array_header_t *header;
     char *stderr;
