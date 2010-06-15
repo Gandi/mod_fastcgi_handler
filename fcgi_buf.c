@@ -122,7 +122,7 @@ int socket_send(int fd, char * buf, int len)
  *      =0 EOF reached
  *      >0 successful read or no room in buffer (NOT # of bytes read)
  */
-int fcgi_buf_socket_recv(fcgi_buf_t *buf, SOCKET fd)
+int fcgi_buf_socket_recv(fcgi_buf_t *buf, int fd)
 {
 	int len;
 
@@ -185,7 +185,7 @@ int fcgi_buf_socket_recv(fcgi_buf_t *buf, SOCKET fd)
  *      =0 if no bytes were written
  *      >0 successful write
  */
-int fcgi_buf_socket_send(fcgi_buf_t *buf, SOCKET fd)
+int fcgi_buf_socket_send(fcgi_buf_t *buf, int fd)
 {
 	int len;
 

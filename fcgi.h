@@ -160,10 +160,8 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr);
 void fcgi_buf_reset(fcgi_buf_t *bufPtr);
 fcgi_buf_t *fcgi_buf_new(apr_pool_t *p, int size);
 
-typedef int SOCKET;
-
-int fcgi_buf_socket_recv(fcgi_buf_t *b, SOCKET socket);
-int fcgi_buf_socket_send(fcgi_buf_t *b, SOCKET socket);
+int fcgi_buf_socket_recv(fcgi_buf_t *b, int fd);
+int fcgi_buf_socket_send(fcgi_buf_t *b, int fd);
 
 void fcgi_buf_added(fcgi_buf_t * const b, const unsigned int len);
 void fcgi_buf_removed(fcgi_buf_t * const b, unsigned int len);
