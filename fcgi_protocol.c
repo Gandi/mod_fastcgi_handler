@@ -129,8 +129,9 @@ typedef struct {
  * complete ENV was buffered, FALSE otherwise.  Note: envp is updated to
  * reflect the current position in the ENV.
  */
-int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr)
+int fcgi_protocol_queue_env(fcgi_request *fr)
 {
+	request_rec *r = fr->r;
 	env_status _env;
 	env_status *env = &_env;
 	int charCount;
@@ -237,8 +238,9 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
  * fr->header when parsing headers, to fr->stderr when reading stderr data,
  * or to the client output buffer otherwises.
  */
-int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
+int fcgi_protocol_dequeue(fcgi_request *fr)
 {
+	apr_pool_t *p = fr->r->pool;
 	FCGI_Header header;
 	int len;
 

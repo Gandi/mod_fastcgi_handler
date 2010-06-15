@@ -45,7 +45,7 @@
 #include <sys/un.h>
 
 /* FastCGI header files */
-#include "mod_fastcgi.h"
+#include "mod_fastcgi_pass.h"
 /* @@@ This should go away when fcgi_protocol is re-written */
 #include "fcgi_protocol.h"
 
@@ -135,8 +135,8 @@ typedef struct {
  */
 void fcgi_protocol_queue_begin_request(fcgi_request *fr);
 void fcgi_protocol_queue_client_buffer(fcgi_request *fr);
-int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr);
-int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr);
+int fcgi_protocol_queue_env(fcgi_request *fr);
+int fcgi_protocol_dequeue(fcgi_request *fr);
 
 /*
  * fcgi_buf.c
@@ -166,12 +166,12 @@ void fcgi_buf_get_to_array(fcgi_buf_t *buf, apr_array_header_t *arr, int len);
  * fcgi_util.c
  */
 
-const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr, const char *server);
+const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr);
 
 /*
  * Globals
  */
 
-extern module MODULE_VAR_EXPORT fastcgi_module;
+extern module MODULE_VAR_EXPORT fastcgi_pass_module;
 
 #endif  /* FCGI_H */

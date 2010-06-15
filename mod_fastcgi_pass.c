@@ -166,8 +166,9 @@ void close_connection_to_fs(fcgi_request *fr)
  *----------------------------------------------------------------------
  */
 static
-const char *process_headers(request_rec *r, fcgi_request *fr)
+const char *process_headers(fcgi_request *fr)
 {
+	request_rec *r = fr->r;
 	ASSERT(fr->parseHeader == SCAN_CGI_READING_HEADERS);
 
 	if (fr->header == NULL)
@@ -508,7 +509,7 @@ int open_connection_to_fs(fcgi_request *fr)
 
 		if (getsockopt(fr->socket_fd, SOL_SOCKET, SO_ERROR, (char *)&error, &len) < 0) {
 			/* Solaris pending error */
-			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
+			ap_log_rerror(FCGI_LOG_ERR_ERRNO, fr->r,
 					"FastCGI: failed to connect to server \"%s\": "
 					"select() failed (Solaris pending error)", fr->server);
 			return FCGI_FAILED;
@@ -517,13 +518,13 @@ int open_connection_to_fs(fcgi_request *fr)
 		if (error != 0) {
 			/* Berkeley-derived pending error */
 			errno = error;
-			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
+			ap_log_rerror(FCGI_LOG_ERR_ERRNO, fr->r,
 					"FastCGI: failed to connect to server \"%s\": "
 					"select() failed (pending error)", fr->server);
 			return FCGI_FAILED;
 		}
 	} else {
-		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
+		ap_log_rerror(FCGI_LOG_ERR_ERRNO, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"select() error - THIS CAN'T HAPPEN!", fr->server);
 		return FCGI_FAILED;
@@ -573,7 +574,7 @@ int socket_io(fcgi_request * const fr)
 
 		switch (state) {
 			case STATE_ENV_SEND:
-				if (fcgi_protocol_queue_env(r, fr) == 0) {
+				if (fcgi_protocol_queue_env(fr) == 0) {
 					goto SERVER_SEND;
 				}
 
@@ -658,7 +659,7 @@ SERVER_SEND:
 		int select_status = select(nfds, &read_set, &write_set, NULL, &timeout);
 
 		if (select_status < 0) {
-			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r, "FastCGI: comm with server "
+			ap_log_rerror(FCGI_LOG_ERR_ERRNO, fr->r, "FastCGI: comm with server "
 					"\"%s\" aborted: select() failed", fr->server);
 			state = STATE_ERROR;
 			break;
@@ -670,7 +671,7 @@ SERVER_SEND:
 			if (fcgi_buf_length(fr->client_output_buffer)) {
 				client_send = 1;
 			} else {
-				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
+				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r, "FastCGI: comm with "
 						"server \"%s\" aborted: idle timeout (%d sec)",
 						fr->server, idle_timeout);
 				state = STATE_ERROR;
@@ -682,7 +683,7 @@ SERVER_SEND:
 			rv = fcgi_buf_socket_send(fr->server_output_buffer, fr->socket_fd);
 
 			if (rv < 0) {
-				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
+				ap_log_rerror(FCGI_LOG_ERR, fr->r, "FastCGI: comm with server "
 						"\"%s\" aborted: write failed", fr->server);
 				state = STATE_ERROR;
 				break;
@@ -694,7 +695,7 @@ SERVER_SEND:
 			rv = fcgi_buf_socket_recv(fr->server_input_buffer, fr->socket_fd);
 
 			if (rv < 0) {
-				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
+				ap_log_rerror(FCGI_LOG_ERR, fr->r, "FastCGI: comm with server "
 						"\"%s\" aborted: read failed", fr->server);
 				state = STATE_ERROR;
 				break;
@@ -706,15 +707,15 @@ SERVER_SEND:
 			}
 		}
 
-		if (fcgi_protocol_dequeue(r->pool, fr)) {
+		if (fcgi_protocol_dequeue(fr)) {
 			state = STATE_ERROR;
 			break;
 		}
 
 		if (fr->parseHeader == SCAN_CGI_READING_HEADERS) {
-			const char *err = process_headers(r, fr);
+			const char *err = process_headers(fr);
 			if (err) {
-				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
+				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 						"FastCGI: comm with server \"%s\" aborted: "
 						"error parsing headers: %s", fr->server, err);
 				state = STATE_ERROR;
@@ -788,12 +789,12 @@ int do_work(request_rec *r, fcgi_request *fr)
 
 	/* send response to client */
 	while (rv == 0 && (fcgi_buf_length(fr->server_input_buffer) || fcgi_buf_length(fr->client_output_buffer))) {
-		if (fcgi_protocol_dequeue(rp, fr)) {
+		if (fcgi_protocol_dequeue(fr)) {
 			rv = HTTP_INTERNAL_SERVER_ERROR;
 		}
 
 		if (fr->parseHeader == SCAN_CGI_READING_HEADERS) {
-			const char *err = process_headers(r, fr);
+			const char *err = process_headers(fr);
 			if (err) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 						"FastCGI: comm with server \"%s\" aborted: "
@@ -844,7 +845,7 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	const char *err = fcgi_util_socket_make_addr(p, fr);
 
 	if (err) {
-		ap_log_rerror(FCGI_LOG_NOERRNO, r,
+		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 				"fastcgi_pass: invalid server address: '%s'", fr->server);
 		return HTTP_INTERNAL_SERVER_ERROR;
 	}
@@ -949,10 +950,10 @@ void *fastcgi_pass_merge_dir_config(apr_pool_t *p, void *parent, void *current)
 	fastcgi_pass_cfg *current_cfg = (fastcgi_pass_cfg *) current;
 	fastcgi_pass_cfg *cfg = apr_pcalloc(p, sizeof(fastcgi_pass_cfg));
 
-	cfg->idle_timeout = current->idle_timeout == -1 ?
-			parent->idle_timeout : current->idle_timeout;
+	cfg->idle_timeout = current_cfg->idle_timeout == -1 ?
+			parent_cfg->idle_timeout : current_cfg->idle_timeout;
 
-	cfg->headers = apr_array_append(p, parent->headers, current->headers);
+	cfg->headers = apr_array_append(p, parent_cfg->headers, current_cfg->headers);
 
 	return cfg;
 }
@@ -969,7 +970,7 @@ const char *fastcgi_pass_cmd_pass_header(cmd_parms *cmd, void *mconf,
 static
 const command_rec fastcgi_pass_cmds[] =
 {
-	AP_INIT_ITERATE("FastCgiPassHeader", fastcgi_pass_cmd_pass_header,
+	AP_INIT_ITERATE("FastCgiPassHeader", fastcgi_pass_cmd_pass_header, NULL,
 			OR_FILEINFO, "a list of headers to pass to the FastCGI application."),
 
 	{ NULL }

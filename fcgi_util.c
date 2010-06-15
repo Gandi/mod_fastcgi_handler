@@ -103,7 +103,7 @@ const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr)
 				&fr->socket_addr_len, fr->server);
 	}
 
-	const char *port_str = strchr(fr->server, ':');
+	char *port_str = strchr(apr_pstrdup(p, fr->server), ':');
 
 	if (!port_str) {
 		return apr_pstrdup(p, "no port specified");
