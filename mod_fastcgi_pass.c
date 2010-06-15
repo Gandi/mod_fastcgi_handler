@@ -35,12 +35,6 @@
 #include "unixd.h"
 
 /*
- * Global variables
- */
-
-fcgi_server *fcgi_servers = NULL;         /* AppClasses */
-
-/*
  *----------------------------------------------------------------------
  *
  * init_module
@@ -498,7 +492,7 @@ int open_connection_to_fs(fcgi_request *fr)
 	if (fr->fd < 0) {
 		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
-				"socket() failed", fr->fs_path);
+				"socket() failed", fr->server);
 		return FCGI_FAILED;
 	}
 
@@ -507,7 +501,7 @@ int open_connection_to_fs(fcgi_request *fr)
 				"FastCGI: failed to connect to server \"%s\": "
 				"socket file descriptor (%u) is larger than "
 				"FD_SETSIZE (%u), you probably need to rebuild Apache with a "
-				"larger FD_SETSIZE", fr->fs_path, fr->fd, FD_SETSIZE);
+				"larger FD_SETSIZE", fr->server, fr->fd, FD_SETSIZE);
 		return FCGI_FAILED;
 	}
 
@@ -518,7 +512,7 @@ int open_connection_to_fs(fcgi_request *fr)
 	if (errno != EINPROGRESS) {
 		ap_log_rerror(FCGI_LOG_ERR, r,
 				"FastCGI: failed to connect to server \"%s\": "
-				"connect() failed", fr->fs_path);
+				"connect() failed", fr->server);
 		return FCGI_FAILED;
 	}
 
@@ -539,14 +533,14 @@ int open_connection_to_fs(fcgi_request *fr)
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"connect() timed out (appConnTimeout=%dsec)",
-				fr->fs_path, 0);
+				fr->server, 0);
 		return FCGI_FAILED;
 	}
 
 	if (status < 0) {
 		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
-				"select() failed", fr->fs_path);
+				"select() failed", fr->server);
 		return FCGI_FAILED;
 	}
 
@@ -558,7 +552,7 @@ int open_connection_to_fs(fcgi_request *fr)
 			/* Solaris pending error */
 			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 					"FastCGI: failed to connect to server \"%s\": "
-					"select() failed (Solaris pending error)", fr->fs_path);
+					"select() failed (Solaris pending error)", fr->server);
 			return FCGI_FAILED;
 		}
 
@@ -567,14 +561,14 @@ int open_connection_to_fs(fcgi_request *fr)
 			errno = error;
 			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 					"FastCGI: failed to connect to server \"%s\": "
-					"select() failed (pending error)", fr->fs_path);
+					"select() failed (pending error)", fr->server);
 			return FCGI_FAILED;
 		}
 	}
 	else {
 		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
-				"select() error - THIS CAN'T HAPPEN!", fr->fs_path);
+				"select() error - THIS CAN'T HAPPEN!", fr->server);
 		return FCGI_FAILED;
 	}
 
@@ -726,7 +720,7 @@ SERVER_SEND:
 
 		if (select_status < 0) {
 			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r, "FastCGI: comm with server "
-					"\"%s\" aborted: select() failed", fr->fs_path);
+					"\"%s\" aborted: select() failed", fr->server);
 			state = STATE_ERROR;
 			break;
 		}
@@ -739,7 +733,7 @@ SERVER_SEND:
 			} else {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
 						"server \"%s\" aborted: idle timeout (%d sec)",
-						fr->fs_path, idle_timeout);
+						fr->server, idle_timeout);
 				state = STATE_ERROR;
 			}
 		}
@@ -750,7 +744,7 @@ SERVER_SEND:
 
 			if (rv < 0) {
 				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
-						"\"%s\" aborted: write failed", fr->fs_path);
+						"\"%s\" aborted: write failed", fr->server);
 				state = STATE_ERROR;
 				break;
 			}
@@ -762,7 +756,7 @@ SERVER_SEND:
 
 			if (rv < 0) {
 				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
-						"\"%s\" aborted: read failed", fr->fs_path);
+						"\"%s\" aborted: read failed", fr->server);
 				state = STATE_ERROR;
 				break;
 			}
@@ -784,7 +778,7 @@ SERVER_SEND:
 			if (err) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 						"FastCGI: comm with server \"%s\" aborted: "
-						"error parsing headers: %s", fr->fs_path, err);
+						"error parsing headers: %s", fr->server, err);
 				state = STATE_ERROR;
 				break;
 			}
@@ -814,7 +808,7 @@ apr_status_t cleanup(void *data)
 
 	if (fr->fs_stderr_len) {
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-				"FastCGI: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
+				"FastCGI: server \"%s\" stderr: %s", fr->server, fr->fs_stderr);
 	}
 
 	return APR_SUCCESS;
@@ -858,7 +852,7 @@ int do_work(request_rec *r, fcgi_request *fr)
 			if (err) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
 						"FastCGI: comm with server \"%s\" aborted: "
-						"error parsing headers: %s", fr->fs_path, err);
+						"error parsing headers: %s", fr->server, err);
 				rv = HTTP_INTERNAL_SERVER_ERROR;
 			}
 		}
@@ -882,7 +876,7 @@ int do_work(request_rec *r, fcgi_request *fr)
 
 		case SCAN_CGI_READING_HEADERS:
 			ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: incomplete headers "
-					"(%d bytes) received from server \"%s\"", fr->header->nelts, fr->fs_path);
+					"(%d bytes) received from server \"%s\"", fr->header->nelts, fr->server);
 
 			/* fall through */
 
@@ -903,15 +897,6 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 {
 	apr_pool_t *p = r->pool;
 
-	const char *fs_path = r->filename;
-	fcgi_server *fs = fcgi_util_fs_get_by_id(fs_path);
-
-	if (fs == NULL) {
-		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
-				"FastCGI: invalid server: \"%s\"", fs_path);
-		return HTTP_FORBIDDEN;
-	}
-
 	fcgi_request *fr = apr_pcalloc(p, sizeof(fcgi_request));
 
 	const char *server = r->handler + 5;
@@ -924,6 +909,7 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	}
 
 	fr->cfg = ap_get_module_config(r->per_dir_config, &fastcgi_pass_module);
+	fr->server = server;
 
 	fr->serverInputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
 	fr->serverOutputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
@@ -940,8 +926,6 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	fr->eofSent = FALSE;
 	fr->expectingClientContent = FALSE;
 	fr->keepReadingFromFcgiApp = TRUE;
-	fr->fs = fs;
-	fr->fs_path = fs_path;
 	fr->fd = -1;
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
 	fr->header = apr_array_make(p, 1, 1);
@@ -992,16 +976,16 @@ int fastcgi_pass_handler(request_rec *r)
 	fcgi_request *fr = NULL;
 	int ret;
 
-	/* setup a new FastCGI request */
+	/* create a new FastCGI request object */
 	if ((ret = create_fcgi_request(r, &fr))) {
 		return ret;
 	}
 
-	/* process the fastcgi-script request */
+	/* process the FastCGI request */
 	if ((ret = do_work(r, fr)) != OK)
 		return ret;
 
-	/* special case redirects */
+	/* special case for redirects */
 	return post_process_for_redirects(r, fr);
 }
 

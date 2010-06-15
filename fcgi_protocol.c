@@ -248,13 +248,13 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 			if (header.version != FCGI_VERSION) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 						"FastCGI: comm with server \"%s\" aborted: protocol error: invalid version: %d != FCGI_VERSION(%d)",
-						fr->fs_path, header.version, FCGI_VERSION);
+						fr->server, header.version, FCGI_VERSION);
 				return HTTP_INTERNAL_SERVER_ERROR;
 			}
 			if (header.type > FCGI_MAXTYPE) {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 						"FastCGI: comm with server \"%s\" aborted: protocol error: invalid type: %d > FCGI_MAXTYPE(%d)",
-						fr->fs_path, header.type, FCGI_MAXTYPE);
+						fr->server, header.type, FCGI_MAXTYPE);
 				return HTTP_INTERNAL_SERVER_ERROR;
 			}
 
@@ -321,7 +321,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 						int discard = ++null - start;
 						ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 								"FastCGI: server \"%s\" sent a null character in the stderr stream!?, "
-								"discarding %d characters of stderr", fr->fs_path, discard);
+								"discarding %d characters of stderr", fr->server, discard);
 						start = null;
 						fr->fs_stderr_len -= discard;
 					}
@@ -333,7 +333,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 						{
 							*end = '\0';
 							ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-									"FastCGI: server \"%s\" stderr: %s", fr->fs_path, start);
+									"FastCGI: server \"%s\" stderr: %s", fr->server, start);
 						}
 						end++;
 						end += strspn(end, "\r\n");
@@ -352,12 +352,12 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 						{
 							/* Full buffer, dump it and complain */
 							ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-									"FastCGI: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
+									"FastCGI: server \"%s\" stderr: %s", fr->server, fr->fs_stderr);
 							ap_log_rerror(FCGI_LOG_WARN_NOERRNO, fr->r,
 									"FastCGI: too much stderr received from server \"%s\", "
 									"increase FCGI_SERVER_MAX_STDERR_LINE_LEN (%d) and rebuild "
 									"or use \"\\n\" to terminate lines",
-									fr->fs_path, FCGI_SERVER_MAX_STDERR_LINE_LEN);
+									fr->server, FCGI_SERVER_MAX_STDERR_LINE_LEN);
 							fr->fs_stderr_len = 0;
 						}
 					}
@@ -371,7 +371,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 								"FastCGI: comm with server \"%s\" aborted: protocol error: "
 								"invalid FCGI_END_REQUEST size: "
 								"%d != sizeof(FCGI_EndRequestBody)(%zu)",
-								fr->fs_path, fr->dataLen, sizeof(FCGI_EndRequestBody));
+								fr->server, fr->dataLen, sizeof(FCGI_EndRequestBody));
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
 					fr->readingEndRequestBody = TRUE;
@@ -391,7 +391,7 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 						 */
 						ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 								"FastCGI: comm with server \"%s\" aborted: protocol error: invalid FCGI_END_REQUEST status: "
-								"%d != FCGI_REQUEST_COMPLETE(%d)", fr->fs_path,
+								"%d != FCGI_REQUEST_COMPLETE(%d)", fr->server,
 								erBody->protocolStatus, FCGI_REQUEST_COMPLETE);
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}

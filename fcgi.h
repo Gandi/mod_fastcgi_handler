@@ -58,20 +58,6 @@ typedef struct {
 } Buffer;
 
 /*
- * fcgi_server holds info for each AppClass specified in this
- * Web server's configuration.
- */
-typedef struct _FastCgiServerInfo {
-    char *fs_path;                  /* pathname of executable */
-    time_t startTime;               /* the time the application was started */
-    time_t restartTime;             /* most recent time when the process
-                                     * manager started a process in this
-                                     * class. */
-    struct _FastCgiServerInfo *next;
-} fcgi_server;
-
-
-/*
  * fcgi_request holds the state of a particular FastCGI request.
  */
 typedef struct {
@@ -80,8 +66,6 @@ typedef struct {
     unsigned char packetType;       /* type of packet */
     int dataLen;                    /* length of data bytes */
     int paddingLen;                 /* record padding after content */
-    fcgi_server *fs;                /* FastCGI server info */
-    const char *fs_path;         /* fcgi_server path */
     Buffer *serverInputBuffer;   /* input buffer from FastCgi server */
     Buffer *serverOutputBuffer;  /* output buffer to FastCgi server */
     Buffer *clientInputBuffer;   /* client input buffer */
@@ -104,8 +88,9 @@ typedef struct {
     struct timeval completeTime;    /* dynamic app's connection close() time */
     int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
 
-    struct sockaddr *socket_addr;   /* Socket Address of FCGI app server class */
-    int socket_addr_len;            /* Length of socket struct */
+	const char *server;             /* server name as given in httpd.conf */
+	struct sockaddr *socket_addr;   /* socket address of the FastCGI application */
+	int socket_addr_len;            /* length of socket struct */
 	fastcgi_pass_cfg *cfg;
 } fcgi_request;
 
@@ -197,15 +182,10 @@ void fcgi_buf_get_to_array(Buffer *buf, apr_array_header_t *arr, int len);
  */
 
 const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request *fr, const char *server);
-fcgi_server *fcgi_util_fs_get_by_id(const char *ePath);
-fcgi_server *fcgi_util_fs_new(apr_pool_t *p);
-void fcgi_util_fs_add(fcgi_server *s);
 
 /*
  * Globals
  */
-
-extern fcgi_server *fcgi_servers;
 
 extern module MODULE_VAR_EXPORT fastcgi_module;
 
