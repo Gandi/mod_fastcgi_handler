@@ -402,7 +402,7 @@ int read_from_client_n_queue(fcgi_request *fr)
 	while (fcgi_buf_free(fr->client_input_buffer) > 0 || fcgi_buf_free(fr->server_output_buffer) > 0) {
 		fcgi_protocol_queue_client_buffer(fr);
 
-		if (fr->expectingClientContent <= 0)
+		if (fr->should_client_block <= 0)
 			return OK;
 
 		fcgi_buf_get_free_block_info(fr->client_input_buffer, &end, &count);
@@ -418,7 +418,7 @@ int read_from_client_n_queue(fcgi_request *fr)
 		}
 
 		if (countRead == 0) {
-			fr->expectingClientContent = 0;
+			fr->should_client_block = 0;
 		}
 		else {
 			fcgi_buf_add_update(fr->client_input_buffer, countRead);
@@ -466,38 +466,21 @@ int write_to_client(fcgi_request *fr)
 	return OK;
 }
 
-/*******************************************************************************
- * Connect to the FastCGI server.
- */
 static
 int open_connection_to_fs(fcgi_request *fr)
 {
-	struct timeval  tval;
-	fd_set          write_fds, read_fds;
-	int             status;
-	request_rec * const r = fr->r;
-	apr_pool_t * const rp = r->pool;
-	const char *socket_path = NULL;
-	struct sockaddr *socket_addr = NULL;
-	int socket_addr_len = 0;
-	const char *err = NULL;
-
-	/* Create the connection point */
-	socket_addr = fr->socket_addr;
-	socket_addr_len = fr->socket_addr_len;
-
-	/* Create the socket */
-	fr->socket_fd = socket(socket_addr->sa_family, SOCK_STREAM, 0);
+	/* create the socket */
+	fr->socket_fd = socket(fr->socket_addr->sa_family, SOCK_STREAM, 0);
 
 	if (fr->socket_fd < 0) {
-		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
+		ap_log_rerror(FCGI_LOG_ERR_ERRNO, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"socket() failed", fr->server);
 		return FCGI_FAILED;
 	}
 
 	if (fr->socket_fd >= FD_SETSIZE) {
-		ap_log_rerror(FCGI_LOG_ERR, r,
+		ap_log_rerror(FCGI_LOG_ERR, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"socket file descriptor (%u) is larger than "
 				"FD_SETSIZE (%u), you probably need to rebuild Apache with a "
@@ -505,32 +488,33 @@ int open_connection_to_fs(fcgi_request *fr)
 		return FCGI_FAILED;
 	}
 
-	/* Connect */
-	if (connect(fr->socket_fd, (struct sockaddr *)socket_addr, socket_addr_len) == 0)
-		goto ConnectionComplete;
+	/* connect the socket */
+	if (connect(fr->socket_fd, (struct sockaddr *)fr->socket_addr, fr->socket_addr_len) == 0)
+		goto connection_complete;
 
 	if (errno != EINPROGRESS) {
-		ap_log_rerror(FCGI_LOG_ERR, r,
+		ap_log_rerror(FCGI_LOG_ERR, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"connect() failed", fr->server);
 		return FCGI_FAILED;
 	}
 
-
-	/* The connect() is non-blocking */
-
+	/* the connect() is non-blocking */
 	errno = 0;
 
+	struct timeval tval;
 	tval.tv_sec = 0;
 	tval.tv_usec = 0;
+
+	fd_set write_fds, read_fds;
 	FD_ZERO(&write_fds);
 	FD_SET(fr->socket_fd, &write_fds);
 	read_fds = write_fds;
 
-	status = select((fr->socket_fd+1), &read_fds, &write_fds, NULL, &tval);
+	int status = select((fr->socket_fd+1), &read_fds, &write_fds, NULL, &tval);
 
 	if (status == 0) {
-		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
+		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"connect() timed out (appConnTimeout=%dsec)",
 				fr->server, 0);
@@ -538,7 +522,7 @@ int open_connection_to_fs(fcgi_request *fr)
 	}
 
 	if (status < 0) {
-		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
+		ap_log_rerror(FCGI_LOG_ERR_ERRNO, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"select() failed", fr->server);
 		return FCGI_FAILED;
@@ -564,17 +548,16 @@ int open_connection_to_fs(fcgi_request *fr)
 					"select() failed (pending error)", fr->server);
 			return FCGI_FAILED;
 		}
-	}
-	else {
+	} else {
 		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"select() error - THIS CAN'T HAPPEN!", fr->server);
 		return FCGI_FAILED;
 	}
 
-ConnectionComplete:
+connection_complete:
 #ifdef TCP_NODELAY
-	if (socket_addr->sa_family == AF_INET) {
+	if (fr->socket_addr->sa_family == AF_INET) {
 		/* We shouldn't be sending small packets and there's no application
 		 * level ack of the data we send, so disable Nagle */
 		int set = 1;
@@ -586,21 +569,9 @@ ConnectionComplete:
 }
 
 static
-void sink_client_data(fcgi_request *fr)
-{
-	char *base;
-	int size;
-
-	fcgi_buf_reset(fr->client_input_buffer);
-	fcgi_buf_get_free_block_info(fr->client_input_buffer, &base, &size);
-
-	while (ap_get_client_block(fr->r, base, size) > 0);
-}
-
-static
 int socket_io(fcgi_request * const fr)
 {
-	enum {
+	static enum {
 		STATE_SOCKET_NONE,
 		STATE_ENV_SEND,
 		STATE_CLIENT_RECV,
@@ -612,21 +583,17 @@ int socket_io(fcgi_request * const fr)
 	}
 	state = STATE_ENV_SEND;
 
-	request_rec *r = fr->r;
-
-	fd_set read_set;
-	fd_set write_set;
-	int nfds = 0;
-	int select_status = 1;
 	int rv;
-	int client_send = FALSE;
-	int is_connected = 0;
+	int client_send = 0;
 	int idle_timeout = fr->cfg->idle_timeout;
 
 	if (idle_timeout < 0)
-		idle_timeout = 0;
+		idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 
 	while (1) {
+		int nfds = 0;
+		fd_set read_set, write_set;
+
 		FD_ZERO(&read_set);
 		FD_ZERO(&write_set);
 
@@ -655,13 +622,12 @@ int socket_io(fcgi_request * const fr)
 SERVER_SEND:
 
 			case STATE_SERVER_SEND:
-				if (!is_connected) {
+				if (fr->socket_fd == -1) {
 					if (open_connection_to_fs(fr) != FCGI_OK) {
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
 
 					set_nonblocking(fr, TRUE);
-					is_connected = 1;
 					nfds = fr->socket_fd + 1;
 				}
 
@@ -679,7 +645,7 @@ SERVER_SEND:
 				/* fall through */
 
 			case STATE_CLIENT_SEND:
-				if (client_send || ! fcgi_buf_free(fr->client_output_buffer)) {
+				if (client_send || !fcgi_buf_free(fr->client_output_buffer)) {
 					if (write_to_client(fr)) {
 						state = STATE_CLIENT_ERROR;
 						break;
@@ -703,7 +669,6 @@ SERVER_SEND:
 		}
 
 		/* setup the io timeout */
-
 		struct timeval timeout;
 
 		if (fcgi_buf_length(fr->client_output_buffer)) {
@@ -716,7 +681,7 @@ SERVER_SEND:
 		}
 
 		/* wait on the socket */
-		select_status = select(nfds, &read_set, &write_set, NULL, &timeout);
+		int select_status = select(nfds, &read_set, &write_set, NULL, &timeout);
 
 		if (select_status < 0) {
 			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r, "FastCGI: comm with server "
@@ -729,7 +694,7 @@ SERVER_SEND:
 			/* select() timeout */
 
 			if (fcgi_buf_length(fr->client_output_buffer)) {
-				client_send = TRUE;
+				client_send = 1;
 			} else {
 				ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "FastCGI: comm with "
 						"server \"%s\" aborted: idle timeout (%d sec)",
@@ -822,22 +787,33 @@ int do_work(request_rec *r, fcgi_request *fr)
 
 	fcgi_protocol_queue_begin_request(fr);
 
+	/* setup proper handling of chunked content */
 	rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
 	if (rv != OK) {
 		return rv;
 	}
 
-	fr->expectingClientContent = ap_should_client_block(r);
+	fr->should_client_block = ap_should_client_block(r);
 
+	/* make sure our pool is clean when destroyed */
 	apr_pool_cleanup_register(rp, (void *)fr, cleanup, apr_pool_cleanup_null);
 
+	/* do socket I/O */
 	rv = socket_io(fr);
 
-	/* comm with the server is done */
+	/* communication with the server is done */
 	close_connection_to_fs(fr);
 
-	sink_client_data(fr);
+	/* read & destroy all remaining client data */
+	char *base;
+	int size;
 
+	fcgi_buf_reset(fr->client_input_buffer);
+	fcgi_buf_get_free_block_info(fr->client_input_buffer, &base, &size);
+
+	while (ap_get_client_block(fr->r, base, size) > 0);
+
+	/* send response to client */
 	while (rv == 0 && (fcgi_buf_length(fr->server_input_buffer) || fcgi_buf_length(fr->client_output_buffer))) {
 		if (fcgi_protocol_dequeue(rp, fr)) {
 			rv = HTTP_INTERNAL_SERVER_ERROR;
@@ -858,14 +834,9 @@ int do_work(request_rec *r, fcgi_request *fr)
 		}
 	}
 
+	/* check if headers have been processed correctly */
 	switch (fr->parseHeader) {
 		case SCAN_CGI_FINISHED:
-
-			/* RUSSIAN_APACHE requires rflush() over bflush() */
-			ap_rflush(r);
-
-			/* fall through */
-
 		case SCAN_CGI_INT_REDIRECT:
 		case SCAN_CGI_SRV_REDIRECT:
 			break;
@@ -923,7 +894,7 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	fr->exitStatusSet = FALSE;
 	fr->requestId = 1; /* anything but zero is OK here */
 	fr->eofSent = FALSE;
-	fr->expectingClientContent = FALSE;
+	fr->should_client_block = 0;
 	fr->socket_fd = -1;
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
 	fr->header = apr_array_make(p, 1, 1);

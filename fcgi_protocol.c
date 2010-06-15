@@ -224,7 +224,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 	 * If all the client data has been sent, and there's room
 	 * in the output buffer, indicate EOF.
 	 */
-	if (movelen == in_len && fr->expectingClientContent <= 0
+	if (movelen == in_len && fr->should_client_block == 0
 			&& fcgi_buf_free(fr->server_output_buffer) >= sizeof(FCGI_Header))
 	{
 		queue_header(fr, FCGI_STDIN, 0);

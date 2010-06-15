@@ -78,7 +78,7 @@ typedef struct {
 	fcgi_buf_t *client_input_buffer;   /* client input buffer */
 	fcgi_buf_t *client_output_buffer;  /* client output buffer */
 
-	int expectingClientContent;     /* >0 => more content, <=0 => no more */
+	int should_client_block;     /* >0 => more content, <=0 => no more */
 	apr_array_header_t *header;
 	char *stderr;
 	int stderr_len;
