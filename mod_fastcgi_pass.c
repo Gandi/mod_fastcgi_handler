@@ -37,30 +37,6 @@
 /*
  *----------------------------------------------------------------------
  *
- * init_module
- *
- *      An Apache module initializer, called by the Apache core
- *      after reading the server config.
- *
- *      Start the process manager no matter what, since there may be a
- *      request for dynamic FastCGI applications without any being
- *      configured as static applications.  Also, check for the existence
- *      and create if necessary a subdirectory into which all dynamic
- *      sockets will go.
- *
- *----------------------------------------------------------------------
- */
-static
-apr_status_t init_module(apr_pool_t * p, apr_pool_t * plog,
-		apr_pool_t * tp, server_rec * s)
-{
-	ap_add_version_component(p, "mod_fastcgi/" MOD_FASTCGI_VERSION);
-	return APR_SUCCESS;
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * get_header_line
  *
  *      Terminate a line:  scan to the next newline, scan back to the
@@ -395,9 +371,6 @@ DuplicateNotAllowed:
 static
 int read_from_client_n_queue(fcgi_request *fr)
 {
-	char *end;
-	int count;
-	long int countRead;
 
 	while (fcgi_buf_free(fr->client_input_buffer) > 0 || fcgi_buf_free(fr->server_output_buffer) > 0) {
 		fcgi_protocol_queue_client_buffer(fr);
@@ -405,12 +378,15 @@ int read_from_client_n_queue(fcgi_request *fr)
 		if (fr->should_client_block <= 0)
 			return OK;
 
+		char *end;
+		int count;
 		fcgi_buf_get_free_block_info(fr->client_input_buffer, &end, &count);
+
 		if (count == 0)
 			return OK;
 
-		if ((countRead = ap_get_client_block(fr->r, end, count)) < 0)
-		{
+		long int countRead = ap_get_client_block(fr->r, end, count);
+		if (countRead < 0) {
 			/* set the header scan state to done to prevent logging an error
 			 * - hokey approach - probably should be using a unique value */
 			fr->parseHeader = SCAN_CGI_FINISHED;
@@ -419,11 +395,11 @@ int read_from_client_n_queue(fcgi_request *fr)
 
 		if (countRead == 0) {
 			fr->should_client_block = 0;
-		}
-		else {
+		} else {
 			fcgi_buf_add_update(fr->client_input_buffer, countRead);
 		}
 	}
+
 	return OK;
 }
 
@@ -432,12 +408,8 @@ int write_to_client(fcgi_request *fr)
 {
 	char *begin;
 	int count;
-	int rv;
-	apr_bucket * bkt;
-	apr_bucket_brigade * bde;
-	apr_bucket_alloc_t * const bkt_alloc = fr->r->connection->bucket_alloc;
-
 	fcgi_buf_get_block_info(fr->client_output_buffer, &begin, &count);
+
 	if (count == 0)
 		return OK;
 
@@ -450,11 +422,12 @@ int write_to_client(fcgi_request *fr)
 	 * reason) so the script can be released from having to wait around
 	 * for the transmission to the client to complete. */
 
-	bde = apr_brigade_create(fr->r->pool, bkt_alloc);
-	bkt = apr_bucket_transient_create(begin, count, bkt_alloc);
+	apr_bucket_alloc_t * const bkt_alloc = fr->r->connection->bucket_alloc;
+	apr_bucket_brigade *bde = apr_brigade_create(fr->r->pool, bkt_alloc);
+	apr_bucket *bkt = apr_bucket_transient_create(begin, count, bkt_alloc);
 	APR_BRIGADE_INSERT_TAIL(bde, bkt);
 
-	rv = ap_pass_brigade(fr->r->output_filters, bde);
+	int rv = ap_pass_brigade(fr->r->output_filters, bde);
 
 	if (rv || fr->r->connection->aborted) {
 		ap_log_rerror(FCGI_LOG_INFO_NOERRNO, fr->r,
@@ -463,6 +436,7 @@ int write_to_client(fcgi_request *fr)
 	}
 
 	fcgi_buf_toss(fr->client_output_buffer, count);
+
 	return OK;
 }
 
@@ -757,7 +731,6 @@ SERVER_SEND:
 	return (state == STATE_ERROR);
 }
 
-
 static
 apr_status_t cleanup(void *data)
 {
@@ -1005,7 +978,6 @@ const command_rec fastcgi_pass_cmds[] =
 static
 void fastcgi_pass_register_hooks(apr_pool_t * p)
 {
-	ap_hook_post_config(init_module, NULL, NULL, APR_HOOK_MIDDLE);
 	ap_hook_handler(fastcgi_pass_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
