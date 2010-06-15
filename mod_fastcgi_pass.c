@@ -800,15 +800,13 @@ apr_status_t cleanup(void *data)
 {
 	fcgi_request *fr = data;
 
-	if (fr == NULL)
-		return APR_SUCCESS;
+	if (fr != NULL) {
+		close_connection_to_fs(fr);
 
-	/* its more than likely already run, but... */
-	close_connection_to_fs(fr);
-
-	if (fr->stderr_len) {
-		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-				"FastCGI: server \"%s\" stderr: %s", fr->server, fr->stderr);
+		if (fr->stderr_len) {
+			ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+					"FastCGI: server \"%s\" stderr: %s", fr->server, fr->stderr);
+		}
 	}
 
 	return APR_SUCCESS;
