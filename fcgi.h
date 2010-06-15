@@ -61,7 +61,13 @@ typedef struct {
  * fcgi_request holds the state of a particular FastCGI request.
  */
 typedef struct {
-    int fd;                         /* connection to FastCGI server */
+	const char *server;             /* server name as given in httpd.conf */
+	fastcgi_pass_cfg *cfg;          /* pointer to per-dir config for convenience */
+
+	struct sockaddr *socket_addr;   /* socket address of the FastCGI application */
+	int socket_addr_len;            /* length of socket struct */
+	int socket_fd;                  /* socket descriptor to FastCGI server */
+
     int gotHeader;                  /* TRUE if reading content bytes */
     unsigned char packetType;       /* type of packet */
     int dataLen;                    /* length of data bytes */
@@ -88,10 +94,6 @@ typedef struct {
     struct timeval completeTime;    /* dynamic app's connection close() time */
     int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
 
-	const char *server;             /* server name as given in httpd.conf */
-	struct sockaddr *socket_addr;   /* socket address of the FastCGI application */
-	int socket_addr_len;            /* length of socket struct */
-	fastcgi_pass_cfg *cfg;
 } fcgi_request;
 
 /* Values of parseHeader field */

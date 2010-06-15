@@ -120,7 +120,7 @@ static
 int set_nonblocking(const fcgi_request *fr, int nonblocking)
 {
 	int nb_flag = 0;
-	int fd_flags = fcntl(fr->fd, F_GETFL, 0);
+	int fd_flags = fcntl(fr->socket_fd, F_GETFL, 0);
 
 	if (fd_flags < 0)
 		return -1;
@@ -137,7 +137,7 @@ int set_nonblocking(const fcgi_request *fr, int nonblocking)
 
 	fd_flags = (nonblocking) ? (fd_flags | nb_flag) : (fd_flags & ~nb_flag);
 
-	return fcntl(fr->fd, F_SETFL, fd_flags);
+	return fcntl(fr->socket_fd, F_SETFL, fd_flags);
 }
 
 /*******************************************************************************
@@ -147,13 +147,13 @@ int set_nonblocking(const fcgi_request *fr, int nonblocking)
 static
 void close_connection_to_fs(fcgi_request *fr)
 {
-	if (fr->fd >= 0) {
+	if (fr->socket_fd >= 0) {
 		struct linger linger = {0, 0};
 		set_nonblocking(fr, FALSE);
 		/* abort the connection entirely */
-		setsockopt(fr->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
-		close(fr->fd);
-		fr->fd = -1;
+		setsockopt(fr->socket_fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
+		close(fr->socket_fd);
+		fr->socket_fd = -1;
 	}
 }
 
@@ -487,26 +487,26 @@ int open_connection_to_fs(fcgi_request *fr)
 	socket_addr_len = fr->socket_addr_len;
 
 	/* Create the socket */
-	fr->fd = socket(socket_addr->sa_family, SOCK_STREAM, 0);
+	fr->socket_fd = socket(socket_addr->sa_family, SOCK_STREAM, 0);
 
-	if (fr->fd < 0) {
+	if (fr->socket_fd < 0) {
 		ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"socket() failed", fr->server);
 		return FCGI_FAILED;
 	}
 
-	if (fr->fd >= FD_SETSIZE) {
+	if (fr->socket_fd >= FD_SETSIZE) {
 		ap_log_rerror(FCGI_LOG_ERR, r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"socket file descriptor (%u) is larger than "
 				"FD_SETSIZE (%u), you probably need to rebuild Apache with a "
-				"larger FD_SETSIZE", fr->server, fr->fd, FD_SETSIZE);
+				"larger FD_SETSIZE", fr->server, fr->socket_fd, FD_SETSIZE);
 		return FCGI_FAILED;
 	}
 
 	/* Connect */
-	if (connect(fr->fd, (struct sockaddr *)socket_addr, socket_addr_len) == 0)
+	if (connect(fr->socket_fd, (struct sockaddr *)socket_addr, socket_addr_len) == 0)
 		goto ConnectionComplete;
 
 	if (errno != EINPROGRESS) {
@@ -524,10 +524,10 @@ int open_connection_to_fs(fcgi_request *fr)
 	tval.tv_sec = 0;
 	tval.tv_usec = 0;
 	FD_ZERO(&write_fds);
-	FD_SET(fr->fd, &write_fds);
+	FD_SET(fr->socket_fd, &write_fds);
 	read_fds = write_fds;
 
-	status = select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
+	status = select((fr->socket_fd+1), &read_fds, &write_fds, NULL, &tval);
 
 	if (status == 0) {
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
@@ -544,11 +544,11 @@ int open_connection_to_fs(fcgi_request *fr)
 		return FCGI_FAILED;
 	}
 
-	if (FD_ISSET(fr->fd, &write_fds) || FD_ISSET(fr->fd, &read_fds)) {
+	if (FD_ISSET(fr->socket_fd, &write_fds) || FD_ISSET(fr->socket_fd, &read_fds)) {
 		int error = 0;
 		apr_socklen_t len = sizeof(error);
 
-		if (getsockopt(fr->fd, SOL_SOCKET, SO_ERROR, (char *)&error, &len) < 0) {
+		if (getsockopt(fr->socket_fd, SOL_SOCKET, SO_ERROR, (char *)&error, &len) < 0) {
 			/* Solaris pending error */
 			ap_log_rerror(FCGI_LOG_ERR_ERRNO, r,
 					"FastCGI: failed to connect to server \"%s\": "
@@ -578,7 +578,7 @@ ConnectionComplete:
 		/* We shouldn't be sending small packets and there's no application
 		 * level ack of the data we send, so disable Nagle */
 		int set = 1;
-		setsockopt(fr->fd, IPPROTO_TCP, TCP_NODELAY, (char *)&set, sizeof(set));
+		setsockopt(fr->socket_fd, IPPROTO_TCP, TCP_NODELAY, (char *)&set, sizeof(set));
 	}
 #endif
 
@@ -662,11 +662,11 @@ SERVER_SEND:
 
 					set_nonblocking(fr, TRUE);
 					is_connected = 1;
-					nfds = fr->fd + 1;
+					nfds = fr->socket_fd + 1;
 				}
 
 				if (fcgi_buf_length(fr->server_output_buffer)) {
-					FD_SET(fr->fd, &write_set);
+					FD_SET(fr->socket_fd, &write_set);
 				} else {
 					ASSERT(fr->eofSent);
 					state = STATE_SERVER_RECV;
@@ -675,7 +675,7 @@ SERVER_SEND:
 				/* fall through */
 
 			case STATE_SERVER_RECV:
-				FD_SET(fr->fd, &read_set);
+				FD_SET(fr->socket_fd, &read_set);
 				/* fall through */
 
 			case STATE_CLIENT_SEND:
@@ -738,9 +738,9 @@ SERVER_SEND:
 			}
 		}
 
-		if (FD_ISSET(fr->fd, &write_set)) {
+		if (FD_ISSET(fr->socket_fd, &write_set)) {
 			/* send to the server */
-			rv = fcgi_buf_socket_send(fr->server_output_buffer, fr->fd);
+			rv = fcgi_buf_socket_send(fr->server_output_buffer, fr->socket_fd);
 
 			if (rv < 0) {
 				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
@@ -750,9 +750,9 @@ SERVER_SEND:
 			}
 		}
 
-		if (FD_ISSET(fr->fd, &read_set)) {
+		if (FD_ISSET(fr->socket_fd, &read_set)) {
 			/* recv from the server */
-			rv = fcgi_buf_socket_recv(fr->server_input_buffer, fr->fd);
+			rv = fcgi_buf_socket_recv(fr->server_input_buffer, fr->socket_fd);
 
 			if (rv < 0) {
 				ap_log_rerror(FCGI_LOG_ERR, r, "FastCGI: comm with server "
@@ -927,7 +927,7 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	fr->eofSent = FALSE;
 	fr->expectingClientContent = FALSE;
 	fr->keepReadingFromFcgiApp = TRUE;
-	fr->fd = -1;
+	fr->socket_fd = -1;
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
 	fr->header = apr_array_make(p, 1, 1);
 
