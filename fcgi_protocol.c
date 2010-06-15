@@ -113,6 +113,17 @@ void add_pass_header_vars(fcgi_request *fr)
 	}
 }
 
+/*
+ * Holds the status of the sending of the environment.
+ */
+typedef struct {
+	enum { PREP, HEADER, NAME, VALUE } pass;
+	char **envp;
+	int headerLen, nameLen, valueLen, totalLen;
+	char *equalPtr;
+	unsigned char headerBuff[8];
+} env_status;
+
 /*******************************************************************************
  * Build and queue the environment name-value pairs.  Returns TRUE if the
  * complete ENV was buffered, FALSE otherwise.  Note: envp is updated to

@@ -50,50 +50,47 @@
 #include "fcgi_protocol.h"
 
 typedef struct {
-    int size;               /* size of entire buffer */
-    int length;             /* number of bytes in current buffer */
-    char *begin;            /* begining of valid data */
-    char *end;              /* end of valid data */
-    char data[1];           /* buffer data */
+	int size;     /* size of entire buffer */
+	int length;   /* number of bytes in current buffer */
+	char *begin;  /* begining of valid data */
+	char *end;    /* end of valid data */
+	char data[1]; /* buffer data */
 } fcgi_buf_t;
 
 /*
  * fcgi_request holds the state of a particular FastCGI request.
  */
 typedef struct {
-	const char *server;             /* server name as given in httpd.conf */
-	fastcgi_pass_cfg *cfg;          /* pointer to per-dir config for convenience */
+	const char *server;                /* server name as given in httpd.conf */
+	fastcgi_pass_cfg *cfg;             /* pointer to per-dir config for convenience */
 
-	struct sockaddr *socket_addr;   /* socket address of the FastCGI application */
-	int socket_addr_len;            /* length of socket struct */
-	int socket_fd;                  /* socket descriptor to FastCGI server */
+	struct sockaddr *socket_addr;      /* socket address of the FastCGI application */
+	int socket_addr_len;               /* length of socket struct */
+	int socket_fd;                     /* socket descriptor to FastCGI server */
 
-    int gotHeader;                  /* TRUE if reading content bytes */
-    unsigned char packetType;       /* type of packet */
-    int dataLen;                    /* length of data bytes */
-    int paddingLen;                 /* record padding after content */
-    fcgi_buf_t *server_input_buffer;   /* input buffer from FastCgi server */
-    fcgi_buf_t *server_output_buffer;  /* output buffer to FastCgi server */
-    fcgi_buf_t *client_input_buffer;   /* client input buffer */
-    fcgi_buf_t *client_output_buffer;  /* client output buffer */
-    int expectingClientContent;     /* >0 => more content, <=0 => no more */
-    apr_array_header_t *header;
-    char *stderr;
-    int stderr_len;
-    int parseHeader;                /* TRUE iff parsing response headers */
-    request_rec *r;
-    int readingEndRequestBody;
-    FCGI_EndRequestBody endRequestBody;
-    fcgi_buf_t *erBufPtr;
-    int exitStatus;
-    int exitStatusSet;
-    unsigned int requestId;
-    int eofSent;
-    struct timeval startTime;       /* dynamic app's connect() attempt start time */
-    struct timeval queueTime;       /* dynamic app's connect() complete time */
-    struct timeval completeTime;    /* dynamic app's connection close() time */
-    int keepReadingFromFcgiApp;     /* still more to read from fcgi app? */
+	int gotHeader;                     /* TRUE if reading content bytes */
+	unsigned char packetType;          /* type of packet */
+	int dataLen;                       /* length of data bytes */
+	int paddingLen;                    /* record padding after content */
 
+	fcgi_buf_t *server_input_buffer;   /* input buffer from FastCgi server */
+	fcgi_buf_t *server_output_buffer;  /* output buffer to FastCgi server */
+	fcgi_buf_t *client_input_buffer;   /* client input buffer */
+	fcgi_buf_t *client_output_buffer;  /* client output buffer */
+
+	int expectingClientContent;     /* >0 => more content, <=0 => no more */
+	apr_array_header_t *header;
+	char *stderr;
+	int stderr_len;
+	int parseHeader;                /* TRUE iff parsing response headers */
+	request_rec *r;
+	int readingEndRequestBody;
+	FCGI_EndRequestBody endRequestBody;
+	fcgi_buf_t *erBufPtr;
+	int exitStatus;
+	int exitStatusSet;
+	unsigned int requestId;
+	int eofSent;
 } fcgi_request;
 
 /* Values of parseHeader field */
@@ -132,18 +129,6 @@ typedef struct {
 #define FCGI_LOG_NOTICE_NOERRNO   __FILE__,__LINE__,APLOG_NOTICE,0
 #define FCGI_LOG_INFO_NOERRNO     __FILE__,__LINE__,APLOG_INFO,0
 #define FCGI_LOG_DEBUG_NOERRNO    __FILE__,__LINE__,APLOG_DEBUG,0
-
-/*
- * Holds the status of the sending of the environment.
- * A quick hack to dump the static vars for the NT port.
- */
-typedef struct {
-    enum { PREP, HEADER, NAME, VALUE } pass;
-    char **envp;
-    int headerLen, nameLen, valueLen, totalLen;
-    char *equalPtr;
-    unsigned char headerBuff[8];
-} env_status;
 
 /*
  * fcgi_protocol.c

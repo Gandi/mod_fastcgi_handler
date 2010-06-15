@@ -762,7 +762,6 @@ SERVER_SEND:
 			}
 
 			if (rv == 0) {
-				fr->keepReadingFromFcgiApp = FALSE;
 				state = STATE_CLIENT_SEND;
 				break;
 			}
@@ -785,7 +784,6 @@ SERVER_SEND:
 		}
 
 		if (fr->exitStatusSet) {
-			fr->keepReadingFromFcgiApp = FALSE;
 			state = STATE_CLIENT_SEND;
 			break;
 		}
@@ -926,7 +924,6 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	fr->requestId = 1; /* anything but zero is OK here */
 	fr->eofSent = FALSE;
 	fr->expectingClientContent = FALSE;
-	fr->keepReadingFromFcgiApp = TRUE;
 	fr->socket_fd = -1;
 	fr->parseHeader = SCAN_CGI_READING_HEADERS;
 	fr->header = apr_array_make(p, 1, 1);
