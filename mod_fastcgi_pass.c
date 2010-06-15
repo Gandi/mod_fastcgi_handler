@@ -806,9 +806,9 @@ apr_status_t cleanup(void *data)
 	/* its more than likely already run, but... */
 	close_connection_to_fs(fr);
 
-	if (fr->fs_stderr_len) {
+	if (fr->stderr_len) {
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-				"FastCGI: server \"%s\" stderr: %s", fr->server, fr->fs_stderr);
+				"FastCGI: server \"%s\" stderr: %s", fr->server, fr->stderr);
 	}
 
 	return APR_SUCCESS;
@@ -921,7 +921,7 @@ int create_fcgi_request(request_rec *r, fcgi_request **frP)
 	fr->erBufPtr = fcgi_buf_new(p, sizeof(FCGI_EndRequestBody) + 1);
 
 	fr->gotHeader = FALSE;
-	fr->fs_stderr = NULL;
+	fr->stderr = NULL;
 	fr->readingEndRequestBody = FALSE;
 	fr->exitStatus = 0;
 	fr->exitStatusSet = FALSE;

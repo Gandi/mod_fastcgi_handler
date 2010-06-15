@@ -72,8 +72,8 @@ typedef struct {
     Buffer *clientOutputBuffer;  /* client output buffer */
     int expectingClientContent;     /* >0 => more content, <=0 => no more */
     apr_array_header_t *header;
-    char *fs_stderr;
-    int fs_stderr_len;
+    char *stderr;
+    int stderr_len;
     int parseHeader;                /* TRUE iff parsing response headers */
     request_rec *r;
     int readingEndRequestBody;

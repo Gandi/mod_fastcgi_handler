@@ -223,7 +223,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 
 /*******************************************************************************
  * Read FastCGI protocol messages from the FastCGI server input buffer into
- * fr->header when parsing headers, to fr->fs_stderr when reading stderr data,
+ * fr->header when parsing headers, to fr->stderr when reading stderr data,
  * or to the client output buffer otherwises.
  */
 int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
@@ -296,9 +296,9 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 
 			case FCGI_STDERR:
 
-				if (fr->fs_stderr == NULL)
+				if (fr->stderr == NULL)
 				{
-					fr->fs_stderr = apr_palloc(p, FCGI_SERVER_MAX_STDERR_LINE_LEN + 1);
+					fr->stderr = apr_palloc(p, FCGI_SERVER_MAX_STDERR_LINE_LEN + 1);
 				}
 
 				/* We're gonna consume all thats here */
@@ -306,24 +306,24 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 
 				while (len > 0)
 				{
-					char *null, *end, *start = fr->fs_stderr;
+					char *null, *end, *start = fr->stderr;
 
 					/* Get as much as will fit in the buffer */
-					int get_len = min(len, FCGI_SERVER_MAX_STDERR_LINE_LEN - fr->fs_stderr_len);
-					fcgi_buf_get_to_block(fr->serverInputBuffer, start + fr->fs_stderr_len, get_len);
+					int get_len = min(len, FCGI_SERVER_MAX_STDERR_LINE_LEN - fr->stderr_len);
+					fcgi_buf_get_to_block(fr->serverInputBuffer, start + fr->stderr_len, get_len);
 					len -= get_len;
-					fr->fs_stderr_len += get_len;
-					*(start + fr->fs_stderr_len) = '\0';
+					fr->stderr_len += get_len;
+					*(start + fr->stderr_len) = '\0';
 
 					/* Disallow nulls, we could be nicer but this is the motivator */
-					while ((null = memchr(start, '\0', fr->fs_stderr_len)))
+					while ((null = memchr(start, '\0', fr->stderr_len)))
 					{
 						int discard = ++null - start;
 						ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
 								"FastCGI: server \"%s\" sent a null character in the stderr stream!?, "
 								"discarding %d characters of stderr", fr->server, discard);
 						start = null;
-						fr->fs_stderr_len -= discard;
+						fr->stderr_len -= discard;
 					}
 
 					/* Print as much as possible  */
@@ -337,28 +337,28 @@ int fcgi_protocol_dequeue(apr_pool_t *p, fcgi_request *fr)
 						}
 						end++;
 						end += strspn(end, "\r\n");
-						fr->fs_stderr_len -= (end - start);
+						fr->stderr_len -= (end - start);
 						start = end;
 					}
 
-					if (fr->fs_stderr_len)
+					if (fr->stderr_len)
 					{
-						if (start != fr->fs_stderr)
+						if (start != fr->stderr)
 						{
 							/* Move leftovers down */
-							memmove(fr->fs_stderr, start, fr->fs_stderr_len);
+							memmove(fr->stderr, start, fr->stderr_len);
 						}
-						else if (fr->fs_stderr_len == FCGI_SERVER_MAX_STDERR_LINE_LEN)
+						else if (fr->stderr_len == FCGI_SERVER_MAX_STDERR_LINE_LEN)
 						{
 							/* Full buffer, dump it and complain */
 							ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
-									"FastCGI: server \"%s\" stderr: %s", fr->server, fr->fs_stderr);
+									"FastCGI: server \"%s\" stderr: %s", fr->server, fr->stderr);
 							ap_log_rerror(FCGI_LOG_WARN_NOERRNO, fr->r,
 									"FastCGI: too much stderr received from server \"%s\", "
 									"increase FCGI_SERVER_MAX_STDERR_LINE_LEN (%d) and rebuild "
 									"or use \"\\n\" to terminate lines",
 									fr->server, FCGI_SERVER_MAX_STDERR_LINE_LEN);
-							fr->fs_stderr_len = 0;
+							fr->stderr_len = 0;
 						}
 					}
 				}
