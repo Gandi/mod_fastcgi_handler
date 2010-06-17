@@ -3,22 +3,6 @@
 #include "fcgi_request.h"
 #include "fcgi_server.h"
 
-/*******************************************************************************
- * Close the connection to the FastCGI server.  This is normally called by
- * do_work(), but may also be called as in request pool cleanup.
- */
-static
-void close_connection_to_fs(fcgi_request_t *fr)
-{
-	if (fr->socket_fd >= 0) {
-		struct linger linger = {0, 0};
-		/* abort the connection entirely */
-		setsockopt(fr->socket_fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
-		close(fr->socket_fd);
-		fr->socket_fd = -1;
-	}
-}
-
 static
 int fastcgi_pass_handler(request_rec *r)
 {
@@ -39,11 +23,7 @@ int fastcgi_pass_handler(request_rec *r)
 	}
 
 	/* Step 3: process the request */
-	if ((ret = fcgi_request_process(fr)) != OK) {
-		return ret;
-	}
-
-	return OK;
+	return fcgi_request_process(fr);
 }
 
 static

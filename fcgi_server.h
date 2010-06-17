@@ -5,6 +5,8 @@
 
 #include "fcgi_request.h"
 
+void fcgi_server_disconnect(fcgi_request_t *fr);
+
 int fcgi_server_connect(fcgi_request_t *fr);
 
 int fcgi_server_send_begin_record(fcgi_request_t *fr, uint16_t request_id,

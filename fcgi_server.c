@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <sys/socket.h>
 
 #include <apr_lib.h>
 #include <apr_strings.h>
@@ -37,6 +38,16 @@ ssize_t socket_recv(int fd, void *buf, size_t len)
 	return bytes_read;
 }
 
+void fcgi_server_disconnect(fcgi_request_t *fr)
+{
+	if (fr->socket_fd >= 0) {
+		struct linger linger = {0, 0};
+		setsockopt(fr->socket_fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
+		close(fr->socket_fd);
+		fr->socket_fd = -1;
+	}
+}
+
 int fcgi_server_connect(fcgi_request_t *fr)
 {
 	/* create the socket */
@@ -50,6 +61,7 @@ int fcgi_server_connect(fcgi_request_t *fr)
 	}
 
 	if (fr->socket_fd >= FD_SETSIZE) {
+		fcgi_server_disconnect(fr);
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"socket file descriptor (%u) is larger than "
@@ -60,6 +72,7 @@ int fcgi_server_connect(fcgi_request_t *fr)
 
 	/* connect the socket */
 	if (connect(fr->socket_fd, (struct sockaddr *)fr->socket_addr, fr->socket_addr_len) == -1) {
+		fcgi_server_disconnect(fr);
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, fr->r,
 				"FastCGI: failed to connect to server \"%s\": "
 				"connect() failed", fr->server);
@@ -543,7 +556,10 @@ int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
 				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
 						"FastCGI: => FCGI_END_REQUEST received (id=%u)", request_id);
 				seen_eos = 1;
-				/* TODO: what about this? force close any sockets, etc? */
+
+				/* force close the socket after receiving
+				 * an FCGI_END_REQUEST packet */
+				fcgi_server_disconnect(fr);
 				break;
 
 			case FCGI_STDOUT:

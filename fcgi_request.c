@@ -143,10 +143,17 @@ int fcgi_request_create(request_rec *r, fcgi_request_t **frP)
 	return OK;
 }
 
+#define CHECK(e) do { \
+	status = e; \
+	if (status != OK) { \
+		goto err; \
+	} \
+} while (0)
+
 int fcgi_request_process(fcgi_request_t *fr)
 {
-	apr_status_t status;
 	apr_pool_t *p = fr->r->pool;
+	int status;
 
 	unsigned int request_id = (fr->r->connection->id & 0xffff) + 1;
 
@@ -157,37 +164,31 @@ int fcgi_request_process(fcgi_request_t *fr)
 			"FastCGI: ==> STEP 1 - send FCGI_BEGIN_REQUEST(id=%u)",
 			request_id);
 
-	status = fcgi_server_send_begin_record(fr, request_id, record_buffer);
-	if (status != OK)
-		return status;
+	CHECK(fcgi_server_send_begin_record(fr, request_id, record_buffer));
 
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
 			"FastCGI: ==> STEP 2 - send FCGI_PARAMS(id=%u)",
 			request_id);
 
-	status = fcgi_server_send_params_record(fr, request_id, record_buffer);
-	if (status != OK)
-		return status;
+	CHECK(fcgi_server_send_params_record(fr, request_id, record_buffer));
 
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
 			"FastCGI: ==> STEP 3 - send FCGI_STDIN(id=%u)",
 			request_id);
 
-	status = fcgi_server_send_stdin_record(fr, request_id, record_buffer);
-	if (status != OK)
-		return status;
+	CHECK(fcgi_server_send_stdin_record(fr, request_id, record_buffer));
 
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
 			"FastCGI: ==> STEP 4 - recv FCGI_STDOUT(id=%u)",
 			request_id);
 
-	status = fcgi_server_recv_stdout_stderr_record(fr, request_id, record_buffer);
-	if (status != OK)
-		return status;
+	CHECK(fcgi_server_recv_stdout_stderr_record(fr, request_id, record_buffer));
 
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
 			"FastCGI: ==> STEP 5 - return OK(id=%u)",
 			request_id);
 
-	return OK;
+err:
+	fcgi_server_disconnect(fr);
+	return status;
 }
