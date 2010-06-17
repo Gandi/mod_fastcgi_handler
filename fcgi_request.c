@@ -138,25 +138,6 @@ int fcgi_request_create(request_rec *r, fcgi_request_t **frP)
 	fr->cfg = ap_get_module_config(r->per_dir_config, &fastcgi_pass_module);
 	fr->r = r;
 
-	/* setup FastCGI buffers */
-	//fr->server_input_buffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-	//fr->server_output_buffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-	//fr->client_input_buffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-	//fr->client_output_buffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-	//fr->erBufPtr = fcgi_buf_new(p, sizeof(FCGI_EndRequestBody) + 1);
-
-	//fr->gotHeader = 0;
-	//fr->stderr = NULL;
-	//fr->readingEndRequestBody = 0;
-	//fr->exitStatus = 0;
-	//fr->exitStatusSet = 0;
-	//fr->requestId = 1; /* anything but zero is OK here */
-	//fr->eofSent = 0;
-	//fr->should_client_block = 0;
-	//fr->socket_fd = -1;
-	//fr->parseHeader = SCAN_CGI_READING_HEADERS;
-	//fr->header = apr_array_make(p, 1, 1);
-
 	*frP = fr;
 
 	return OK;
@@ -172,34 +153,41 @@ int fcgi_request_process(fcgi_request_t *fr)
 	/* allocate a buffer for at least FCGI_MAX_LENGTH+FCGI_HEADER_LEN bytes */
 	uint8_t *record_buffer = apr_pcalloc(p, (FCGI_MAX_LENGTH + FCGI_HEADER_LEN + 1) * 2);
 
-	/*
-	 * build and send "FCGI_BEGIN_REQUEST" Record to the backend connexion
-	 */
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+			"FastCGI: ==> STEP 1 - send FCGI_BEGIN_REQUEST(id=%u)",
+			request_id);
+
 	status = fcgi_server_send_begin_record(fr, request_id, record_buffer);
 	if (status != OK)
 		return status;
 
-	/*
-	 * build and send "FCGI_PARAMS" Record to the backend connexion
-	 */
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+			"FastCGI: ==> STEP 2 - send FCGI_PARAMS(id=%u)",
+			request_id);
+
 	status = fcgi_server_send_params_record(fr, request_id, record_buffer);
 	if (status != OK)
 		return status;
 
-	/*
-	 * Transfer any put/post args, CERN style (formated as "FCGI_STDIN" Record) to the backend connexion...
-	 */
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+			"FastCGI: ==> STEP 3 - send FCGI_STDIN(id=%u)",
+			request_id);
+
 	status = fcgi_server_send_stdin_record(fr, request_id, record_buffer);
 	if (status != OK)
 		return status;
 
-	/*
-	 * Handle script return (unformat "FCGI_STDOUT" and "FCGI_STDERR" Record)...
-	 * and send it to the client connexion
-	 */
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+			"FastCGI: ==> STEP 4 - recv FCGI_STDOUT(id=%u)",
+			request_id);
+
 	status = fcgi_server_recv_stdout_stderr_record(fr, request_id, record_buffer);
 	if (status != OK)
 		return status;
+
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+			"FastCGI: ==> STEP 5 - return OK(id=%u)",
+			request_id);
 
 	return OK;
 }

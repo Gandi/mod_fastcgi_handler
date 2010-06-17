@@ -29,17 +29,17 @@ int fastcgi_pass_handler(request_rec *r)
 	int ret;
 
 	/* Step 1: create a new FastCGI request object */
-	if ((ret = fcgi_request_create(r, &fr)) != APR_SUCCESS) {
+	if ((ret = fcgi_request_create(r, &fr)) != OK) {
 		return ret;
 	}
 
 	/* Step 2: connect to the FastCGI server */
-	if ((ret = fcgi_server_connect(fr)) != APR_SUCCESS) {
+	if ((ret = fcgi_server_connect(fr)) != OK) {
 		return ret;
 	}
 
 	/* Step 3: process the request */
-	if ((ret = fcgi_request_process(fr)) != APR_SUCCESS) {
+	if ((ret = fcgi_request_process(fr)) != OK) {
 		return ret;
 	}
 

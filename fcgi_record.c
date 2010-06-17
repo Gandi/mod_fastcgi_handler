@@ -69,5 +69,5 @@ uint32_t fcgi_record_build(fcgi_header_t header, uint16_t request_id,
 	if (padding_length > 0)
 		memset(data + content_length, '\0', padding_length);
 
-	return content_length + FCGI_HEADER_LEN + padding_length;
+	return padding_length;
 }
