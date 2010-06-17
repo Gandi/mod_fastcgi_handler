@@ -11,7 +11,7 @@
 #include "fcgi_header.h"
 #include "fcgi_request.h"
 
-#include "mod_fastcgi_pass.h"
+#include "mod_fastcgi_handler.h"
 
 #ifndef SUN_LEN
 #define SUN_LEN(sock) \
@@ -129,13 +129,13 @@ int fcgi_request_create(request_rec *r, fcgi_request_t **frP)
 
 	if (err) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-				"fastcgi_pass: invalid server address: '%s': %s",
+				"FastCGI: invalid server address: '%s': %s",
 				fr->server, err);
 		return HTTP_INTERNAL_SERVER_ERROR;
 	}
 
 	/* keep a pointer to cfg and r for convenience */
-	fr->cfg = ap_get_module_config(r->per_dir_config, &fastcgi_pass_module);
+	fr->cfg = ap_get_module_config(r->per_dir_config, &fastcgi_handler_module);
 	fr->r = r;
 
 	*frP = fr;

@@ -11,8 +11,8 @@
 typedef struct {
 	int idle_timeout;
 	apr_array_header_t *headers;
-} fastcgi_pass_cfg;
+} fastcgi_handler_cfg;
 
-extern module MODULE_VAR_EXPORT fastcgi_pass_module;
+extern module MODULE_VAR_EXPORT fastcgi_handler_module;
 
 #endif
