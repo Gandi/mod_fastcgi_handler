@@ -3,7 +3,7 @@ mod_fastcgi_handler
 ===================
 
 :Author: `Benedikt Böhm <bb@xnull.de>`_
-:Version: 0.1
+:Version: 0.2
 :Web: http://bb.xnull.de/projects/mod_fastcgi_handler/
 :Source: http://git.xnull.de/cgit/mod_fastcgi_handler/ (also on `github <http://github.com/hollow/mod_fastcgi_handler>`_)
 :Download: http://bb.xnull.de/projects/mod_fastcgi_handler/dist/
@@ -30,4 +30,32 @@ The solution is to provide simple handler for external FastCGI applications.
 Installation
 ============
 
-TBD
+To compile and install this module, use ``apxs`` provided by the apache
+webserver:
+::
+
+  apxs -i -a -o mod_fastcgi_handler.so -c *.c
+
+Configuration
+=============
+
+mod_fastcgi_handler provides a handler that can be activated by using the
+``AddHandler`` and ``SetHandler`` directives. To use mod_fastcgi_handler with
+PHP-FPM add the following option to your httpd.conf:
+::
+
+  AddHandler fcgi:/var/run/php-fpm.socket .php
+
+To use mod_fastcgi_handler with a Django FastCGI application running on port 3000:
+::
+
+  <Location />
+    SetHandler fcgi:127.0.0.1:3000
+  </Location>
+
+Bugs
+====
+
+mod_fastcgi_handler is beta-quality software. It has not been widely tested,
+and some production-critical features, like non-blocking sockets and timeouts
+have not yet been implemented.
