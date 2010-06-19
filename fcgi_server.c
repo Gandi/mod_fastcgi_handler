@@ -15,27 +15,45 @@
 #include "fcgi_server.h"
 
 static
-ssize_t socket_send(int fd, void *buf, size_t len)
+ssize_t socket_send(fcgi_request_t *fr, void *buf, size_t len)
 {
 	ssize_t bytes_sent;
 
 	do {
-		bytes_sent = write(fd, buf, len);
+		bytes_sent = write(fr->socket_fd, buf, len);
 	} while (bytes_sent == -1 && errno == EINTR);
 
 	return bytes_sent;
 }
 
 static
-ssize_t socket_recv(int fd, void *buf, size_t len)
+ssize_t socket_recv(fcgi_request_t *fr, void *buf, size_t len)
 {
 	ssize_t bytes_read;
 
 	do {
-		bytes_read = read(fd, buf, len);
+		bytes_read = read(fr->socket_fd, buf, len);
 	} while (bytes_read == -1 && errno == EINTR);
 
+	if (bytes_read == -1) {
+		ap_log_rerror(APLOG_MARK, APLOG_ERR, errno, fr->r,
+				"FastCGI: failed to read from backend server");
+	}
+
 	return bytes_read;
+}
+
+static
+void socket_sink(fcgi_request_t *fr)
+{
+	ssize_t bytes_read;
+	char buf[1024];
+
+	do {
+		do {
+			bytes_read = read(fr->socket_fd, buf, 1024);
+		} while (bytes_read == -1 && errno == EINTR);
+	} while (bytes_read > 0);
 }
 
 void fcgi_server_disconnect(fcgi_request_t *fr)
@@ -101,7 +119,7 @@ int fcgi_server_send_begin_record(fcgi_request_t *fr, uint16_t request_id,
 			request_id, FCGI_RESPONDER, 0); /* TODO: FCGI_KEEP_CONN */
 
 	/* send data to the FastCGI server */
-	ssize_t bytes_sent = socket_send(fr->socket_fd, record_buffer,
+	ssize_t bytes_sent = socket_send(fr, record_buffer,
 			sizeof(struct fcgi_record_begin_request));
 
 	if (bytes_sent == -1) {
@@ -211,7 +229,7 @@ int fcgi_server_send_params_record(fcgi_request_t *fr, uint16_t request_id,
 		FCGI_HEADER_LEN;
 
 	/* send data to the FastCGI server */
-	ssize_t bytes_sent = socket_send(fr->socket_fd, record_buffer, len);
+	ssize_t bytes_sent = socket_send(fr, record_buffer, len);
 
 	if (bytes_sent == -1) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, errno, fr->r,
@@ -229,7 +247,7 @@ int fcgi_server_send_params_record(fcgi_request_t *fr, uint16_t request_id,
 	}
 
 	/* send data to the FastCGI server */
-	bytes_sent = socket_send(fr->socket_fd, record_buffer, FCGI_HEADER_LEN);
+	bytes_sent = socket_send(fr, record_buffer, FCGI_HEADER_LEN);
 
 	if (bytes_sent == -1) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, errno, fr->r,
@@ -296,7 +314,7 @@ int fcgi_server_send_stdin_record(fcgi_request_t *fr, uint16_t request_id,
 					request_id, FCGI_STDIN, len);
 
 			/* send header data to the FastCGI server */
-			ssize_t bytes_sent = socket_send(fr->socket_fd,
+			ssize_t bytes_sent = socket_send(fr,
 					record_buffer, FCGI_HEADER_LEN);
 
 			if (bytes_sent == -1) {
@@ -305,7 +323,7 @@ int fcgi_server_send_stdin_record(fcgi_request_t *fr, uint16_t request_id,
 			}
 
 			/* send stdin data to the FastCGI server */
-			bytes_sent = socket_send(fr->socket_fd, (char *)data, len);
+			bytes_sent = socket_send(fr, (char *)data, len);
 
 			if (bytes_sent == -1) {
 				server_stopped_reading = 1;
@@ -313,7 +331,7 @@ int fcgi_server_send_stdin_record(fcgi_request_t *fr, uint16_t request_id,
 			}
 
 			/* send padding to the FastCGI server */
-			bytes_sent = socket_send(fr->socket_fd,
+			bytes_sent = socket_send(fr,
 					((char *)record_buffer) + FCGI_HEADER_LEN + len,
 					padding_length);
 
@@ -332,7 +350,7 @@ int fcgi_server_send_stdin_record(fcgi_request_t *fr, uint16_t request_id,
 	fcgi_header_set((fcgi_header_t)record_buffer, FCGI_VERSION_1, FCGI_STDIN, request_id, 0, 0);
 
 	/* send data to the FastCGI server */
-	ssize_t bytes_sent = socket_send(fr->socket_fd, record_buffer, FCGI_HEADER_LEN);
+	ssize_t bytes_sent = socket_send(fr, record_buffer, FCGI_HEADER_LEN);
 
 	if (bytes_sent == -1) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, errno, fr->r,
@@ -346,7 +364,7 @@ int fcgi_server_send_stdin_record(fcgi_request_t *fr, uint16_t request_id,
 static
 int fcgi_server_recv_check_header(fcgi_request_t *fr,
 		uint16_t request_id, fcgi_header_t header, uint8_t *type,
-		uint16_t *content_length, uint32_t *total_record_len)
+		uint32_t *payload_len, uint16_t *padding_len)
 {
 	/* get record version */
 	uint8_t version = fcgi_header_version_get(header);
@@ -376,21 +394,20 @@ int fcgi_server_recv_check_header(fcgi_request_t *fr,
 	}
 
 	/* get content and padding length of the record from header */
-	uint8_t padding_length = fcgi_header_padding_length_get(header);
-
-	*content_length = fcgi_header_content_length_get(header);
-	*total_record_len = *content_length + padding_length + FCGI_HEADER_LEN;
+	*padding_len = fcgi_header_padding_length_get(header);
+	*payload_len = fcgi_header_content_length_get(header) +
+		*padding_len;
 
 	return OK;
 }
 
 static
 int fcgi_server_send_stdout_data(fcgi_request_t *fr, uint16_t request_id,
-		void *data, uint16_t content_length)
+		void *data, uint16_t payload_len)
 {
 	apr_bucket_alloc_t *bkt_alloc = fr->r->connection->bucket_alloc;
 	apr_bucket_brigade *bde = apr_brigade_create(fr->r->pool, bkt_alloc);
-	apr_bucket *bkt = apr_bucket_transient_create(data, content_length, bkt_alloc);
+	apr_bucket *bkt = apr_bucket_transient_create(data, payload_len, bkt_alloc);
 	APR_BRIGADE_INSERT_TAIL(bde, bkt);
 
 	int rv = ap_pass_brigade(fr->r->output_filters, bde);
@@ -408,16 +425,12 @@ int fcgi_server_send_stdout_data(fcgi_request_t *fr, uint16_t request_id,
  * to work with fcgi_record types */
 static
 int fcgi_server_parse_headers(fcgi_request_t *fr, uint16_t request_id,
-		void *_data, uint16_t content_length)
+		char **data)
 {
 	request_rec *r = fr->r;
-	char *data = apr_pstrndup(fr->r->pool, _data, content_length);
-	int ret;
+	int ret, termarg;
 
-	const char *termch;
-	int termarg;
-
-	if ((ret = ap_scan_script_header_err_strs(r, NULL, &termch, &termarg, data, NULL))) {
+	if ((ret = ap_scan_script_header_err_strs(r, NULL, (const char **)data, &termarg, *data, NULL))) {
 		/*
 		 * ret could be HTTP_NOT_MODIFIED in the case that the CGI script
 		 * does not set an explicit status and ap_meets_conditions, which
@@ -486,86 +499,78 @@ int fcgi_server_parse_headers(fcgi_request_t *fr, uint16_t request_id,
 }
 
 int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
-		uint16_t request_id, void *record_buffer)
+		uint16_t request_id, void *buffer)
 {
 	apr_status_t status = OK;
 
-	/* current record header information */
-	int is_header = 1;
-	uint8_t type = FCGI_UNKNOWN_TYPE;
-	uint16_t content_length = 0;
-
 	/* state information */
+	uint8_t type = FCGI_UNKNOWN_TYPE;
+	uint32_t payload_len = 0;
+	uint16_t padding_len = 0;
 	int seen_eos = 0;
-	size_t buffer_len = 0;
-	uint32_t total_record_len = 0;
 	int is_cgi_header = 1;
 
-	char *p = NULL;
+	char *p, *data;
 	int i;
 
 	do {
-		while ((buffer_len < FCGI_HEADER_LEN || buffer_len < total_record_len) && !seen_eos)
-		{
-			/* read data from the FastCGI server */
-			ssize_t bytes_read = socket_recv(fr->socket_fd, ((char *)record_buffer) + buffer_len, HUGE_STRING_LEN);
+		payload_len = 0;
 
-			if (bytes_read == 0) {
-				seen_eos = 1;
-			} else if (bytes_read == -1) {
-				ap_log_rerror(APLOG_MARK, APLOG_ERR, errno, fr->r,
-						"FastCGI: failed to read from backend server (id=%u)", request_id);
-				return HTTP_INTERNAL_SERVER_ERROR;
-			}
+		/* Step 1: read FCGI packet header */
+		ssize_t bytes_read = socket_recv(fr, buffer, FCGI_HEADER_LEN);
 
-			/* inc buffer len with received data len */
-			buffer_len += bytes_read;
-
-			if (buffer_len < FCGI_HEADER_LEN && seen_eos) {
-				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, fr->r,
-						"FastCGI: premature end of header from backend server (id=%u, buffer_len=%lu)",
-						request_id, buffer_len);
-				return HTTP_INTERNAL_SERVER_ERROR;
-			}
+		if (bytes_read == -1) {
+			status = HTTP_INTERNAL_SERVER_ERROR;
+			goto out;
 		}
 
-		/* if is header zone and buffer_len >= FCGI_HEADER_LEN */
-		if (is_header) {
-			is_header = 0;
-			status = fcgi_server_recv_check_header(fr, request_id,
-					(fcgi_header_t)record_buffer, &type,
-					&content_length, &total_record_len);
-
-			if (status != OK)
-				return status;
+		if (bytes_read < FCGI_HEADER_LEN) {
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, fr->r,
+					"FastCGI: premature end of header from backend server (id=%u, bytes_read=%lu, needed=%u)",
+					request_id, bytes_read, FCGI_HEADER_LEN);
+			status = HTTP_INTERNAL_SERVER_ERROR;
+			goto out;
 		}
 
-		if (buffer_len < total_record_len && seen_eos) {
-			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
-					"FastCGI: premature end of stream from backend server (id=%u, buffer_len=%lu, record_length=%u)",
-					request_id, buffer_len, total_record_len);
-			return HTTP_INTERNAL_SERVER_ERROR;
+		/* Step 2: parse header */
+		status = fcgi_server_recv_check_header(fr, request_id,
+				(fcgi_header_t)buffer, &type, &payload_len, &padding_len);
+
+		if (status != OK)
+			goto out;
+
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+				"FastCGI: packet received (id=%u, type=%u, payload_len=%u)",
+				request_id, type, payload_len);
+
+		/* Step 3: read FCGI payload */
+		bytes_read = socket_recv(fr, buffer, payload_len);
+
+		if (bytes_read == -1) {
+			status = HTTP_INTERNAL_SERVER_ERROR;
+			goto out;
 		}
 
-		if (buffer_len < total_record_len) {
-			continue;
+		if (bytes_read < payload_len) {
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, fr->r,
+					"FastCGI: premature end of payload from backend server (id=%u, bytes_read=%lu, needed=%u)",
+					request_id, bytes_read, payload_len);
+			status = HTTP_INTERNAL_SERVER_ERROR;
+			goto out;
 		}
 
+		payload_len -= padding_len;
+		data = buffer;
+		data[payload_len] = '\0';
+
+		/* Step 4: handle packet types */
 		switch (type) {
 			case FCGI_END_REQUEST:
-				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
-						"FastCGI: => FCGI_END_REQUEST received (id=%u)", request_id);
 				seen_eos = 1;
-
-				/* force close the socket after receiving
-				 * an FCGI_END_REQUEST packet */
-				fcgi_server_disconnect(fr);
 				break;
 
 			case FCGI_STDOUT:
-				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
-						"FastCGI: => FCGI_STDOUT received (id=%u, content_length=%u)",
-						request_id, content_length);
+				p = data;
 
 				if (is_cgi_header) {
 					is_cgi_header = 0;
@@ -574,57 +579,58 @@ int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
 					/* XXX: this assumes that the backend does not send more
 					 * than 64K of headers, which is probably safe, but it
 					 * should be fixed nevertheless. */
-					status = fcgi_server_parse_headers(fr, request_id,
-							((char *)record_buffer) + FCGI_HEADER_LEN, content_length);
 
-					if (status != OK)
-						/* TODO: sink remaining data from the backend server */
-						return status;
-				} else {
-					status = fcgi_server_send_stdout_data(fr, request_id,
-							((char *)record_buffer) + FCGI_HEADER_LEN, content_length);
+					status = fcgi_server_parse_headers(fr, request_id,
+							&data);
 
 					if (status != OK) {
-						/* TODO: sink remaining data from the backend server */
-						return status;
+						ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+								"FastCGI: => CGI headers return not OK (id=%u, status=%i)",
+								request_id, status);
+						goto out;
+					}
+
+					if (data) {
+						payload_len -= (data - p);
+					}
+				}
+
+				/* content-length = 0 */
+				if (data && *data) {
+					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
+							"FastCGI: sending CGI data (id=%u, payload_len=%u)",
+							request_id, payload_len);
+
+					status = fcgi_server_send_stdout_data(fr, request_id,
+							data, payload_len);
+
+					if (status != OK) {
+						goto out;
 					}
 				}
 				break;
 
 			case FCGI_STDERR:
-				p = ((char *)record_buffer) + FCGI_HEADER_LEN;
+				p = data;
 
-				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
-						"FastCGI: => FCGI_STDERR received (id=%u, content_length=%u)",
-						request_id, content_length);
+				for (i = 0; i < payload_len; i++) {
+					if (data[i] == '\n' || data[i] == '\r' || data[i] == '\0') {
+						data[i] = '\0';
 
-				for (i = 0; i < content_length; i++) {
-					if (((char *)record_buffer)[i] == '\n' || ((char *)record_buffer)[i] == '\r') {
-						((char *)record_buffer)[i] = '\0';
-
-						if ((p - (char *)record_buffer + i) > 0) {
+						if ((data - p) > 0) {
 							ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, fr->r,
 									"FastCGI: STDERR(id=%u): %s", request_id, p);
 						}
 
-						p = ((char *)record_buffer) + i + 1;
+						p = data + i + 1;
 					}
 				}
 				break;
 		}
-
-		if (buffer_len >= total_record_len) {
-			buffer_len -= total_record_len;
-
-			if (buffer_len > 0) {
-				memcpy(record_buffer, ((char *)record_buffer) + total_record_len, buffer_len);
-			}
-
-			total_record_len = 0;
-			content_length = 0;
-			is_header = 1;
-		}
 	} while (!seen_eos);
 
-	return OK;
+out:
+	socket_sink(fr);
+	fcgi_server_disconnect(fr);
+	return status;
 }
