@@ -201,16 +201,6 @@ void fcgi_add_cgi_vars(fcgi_request_t *fr)
 
 	apr_table_setn(e, "SCRIPT_FILENAME", apr_pstrcat(r->pool, document_root, script_name, NULL));
 	apr_table_setn(e, "PATH_TRANSLATED", apr_pstrcat(r->pool, document_root, script_name, NULL));
-
-	int i;
-
-	for (i = 0; i < fr->cfg->headers->nelts; ++i) {
-		const char *header = ((const char *) fr->cfg->headers->elts) + i;
-		const char *value = apr_table_get(fr->r->headers_in, header);
-		if (val) {
-			apr_table_setn(e, header, value);
-		}
-	}
 }
 
 int fcgi_server_send_params_record(fcgi_request_t *fr, uint16_t request_id,
