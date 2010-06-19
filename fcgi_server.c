@@ -161,8 +161,9 @@ char *fcgi_original_uri(request_rec *r)
 }
 
 static
-void fcgi_add_cgi_vars(request_rec *r)
+void fcgi_add_cgi_vars(fcgi_request_t *fr)
 {
+	request_rec *r = fr->r;
 	apr_table_t *e = r->subprocess_env;
 
 	apr_table_setn(e, "GATEWAY_INTERFACE", "CGI/1.1");
@@ -199,7 +200,17 @@ void fcgi_add_cgi_vars(request_rec *r)
 	const char *script_name = apr_table_get(e, "SCRIPT_NAME");
 
 	apr_table_setn(e, "SCRIPT_FILENAME", apr_pstrcat(r->pool, document_root, script_name, NULL));
-	apr_table_setn(e, "PATH_TRANSLATED",apr_pstrcat(r->pool, document_root, script_name, NULL));
+	apr_table_setn(e, "PATH_TRANSLATED", apr_pstrcat(r->pool, document_root, script_name, NULL));
+
+	int i;
+
+	for (i = 0; i < fr->cfg->headers->nelts; ++i) {
+		const char *header = ((const char *) fr->cfg->headers->elts) + i;
+		const char *value = apr_table_get(fr->r->headers_in, header);
+		if (val) {
+			apr_table_setn(e, header, value);
+		}
+	}
 }
 
 int fcgi_server_send_params_record(fcgi_request_t *fr, uint16_t request_id,
@@ -207,8 +218,7 @@ int fcgi_server_send_params_record(fcgi_request_t *fr, uint16_t request_id,
 {
 	/* add all environment variables to r->subprocess_env */
 	ap_add_common_vars(fr->r);
-	fcgi_add_cgi_vars(fr->r);
-	/* TODO: FastCgiPassHeader */
+	fcgi_add_cgi_vars(fr);
 
 	/* build FCGI_PARAMS record based on apache environement */
 	apr_pool_t *p = fr->r->pool;

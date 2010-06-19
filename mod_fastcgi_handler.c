@@ -57,7 +57,7 @@ const char *fastcgi_handler_cmd_pass_header(cmd_parms *cmd, void *mconf,
 		const char *arg)
 {
 	fastcgi_handler_cfg *cfg = (fastcgi_handler_cfg *) mconf;
-	*(const char **)apr_array_push(cfg->headers) = arg;
+	APR_ARRAY_PUSH(const char *, cfg->headers) = arg;
 	return NULL;
 }
 
