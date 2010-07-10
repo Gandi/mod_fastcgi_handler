@@ -3,7 +3,7 @@ mod_fastcgi_handler
 ===================
 
 :Author: `Benedikt Böhm <bb@xnull.de>`_
-:Version: 0.2
+:Version: 0.3
 :Web: http://bb.xnull.de/projects/mod_fastcgi_handler/
 :Source: http://git.xnull.de/cgit/mod_fastcgi_handler/ (also on `github <http://github.com/hollow/mod_fastcgi_handler>`_)
 :Download: http://bb.xnull.de/projects/mod_fastcgi_handler/dist/

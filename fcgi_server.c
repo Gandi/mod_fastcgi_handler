@@ -131,84 +131,12 @@ int fcgi_server_send_begin_record(fcgi_request_t *fr, uint16_t request_id,
 	return OK;
 }
 
-/* Obtain the Request-URI from the original request-line, returning
- * a new string from the request pool containing the URI or "".
- */
-static
-char *fcgi_original_uri(request_rec *r)
-{
-	char *first, *last;
-
-	if (r->the_request == NULL) {
-		return (char *) apr_pcalloc(r->pool, 1);
-	}
-
-	first = r->the_request;     /* use the request-line */
-
-	while (*first && !apr_isspace(*first)) {
-		++first;                /* skip over the method */
-	}
-	while (apr_isspace(*first)) {
-		++first;                /*   and the space(s)   */
-	}
-
-	last = first;
-	while (*last && !apr_isspace(*last)) {
-		++last;                 /* end at next whitespace */
-	}
-
-	return apr_pstrmemdup(r->pool, first, last - first);
-}
-
-static
-void fcgi_add_cgi_vars(fcgi_request_t *fr)
-{
-	request_rec *r = fr->r;
-	apr_table_t *e = r->subprocess_env;
-
-	apr_table_setn(e, "GATEWAY_INTERFACE", "CGI/1.1");
-	apr_table_setn(e, "SERVER_PROTOCOL", r->protocol);
-	apr_table_setn(e, "REQUEST_METHOD", r->method);
-	apr_table_setn(e, "QUERY_STRING", r->args ? r->args : "");
-	apr_table_setn(e, "REQUEST_URI", fcgi_original_uri(r));
-
-	/* Note that the code below special-cases scripts run from includes,
-	 * because it "knows" that the sub_request has been hacked to have the
-	 * args and path_info of the original request, and not any that may have
-	 * come with the script URI in the include command.  Ugh.
-	 */
-
-	if (!strcmp(r->protocol, "INCLUDED")) {
-		apr_table_setn(e, "SCRIPT_NAME", r->uri);
-		if (r->path_info && *r->path_info) {
-			apr_table_setn(e, "PATH_INFO", r->path_info);
-		}
-	}       
-	else if (!r->path_info || !*r->path_info) {
-		apr_table_setn(e, "SCRIPT_NAME", r->uri);
-	}
-	else {
-		int path_info_start = ap_find_path_info(r->uri, r->path_info);
-
-		apr_table_setn(e, "SCRIPT_NAME",
-				apr_pstrndup(r->pool, r->uri, path_info_start));
-
-		apr_table_setn(e, "PATH_INFO", r->path_info);
-	}
-
-	const char *document_root = apr_table_get(e, "DOCUMENT_ROOT");
-	const char *script_name = apr_table_get(e, "SCRIPT_NAME");
-
-	apr_table_setn(e, "SCRIPT_FILENAME", apr_pstrcat(r->pool, document_root, script_name, NULL));
-	apr_table_setn(e, "PATH_TRANSLATED", apr_pstrcat(r->pool, document_root, script_name, NULL));
-}
-
 int fcgi_server_send_params_record(fcgi_request_t *fr, uint16_t request_id,
 		void *record_buffer)
 {
 	/* add all environment variables to r->subprocess_env */
 	ap_add_common_vars(fr->r);
-	fcgi_add_cgi_vars(fr);
+	ap_add_cgi_vars(fr->r);
 
 	/* build FCGI_PARAMS record based on apache environement */
 	apr_pool_t *p = fr->r->pool;
