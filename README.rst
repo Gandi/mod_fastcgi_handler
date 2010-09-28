@@ -4,9 +4,9 @@ mod_fastcgi_handler
 
 :Author: `Benedikt Böhm <bb@xnull.de>`_
 :Version: 0.3
-:Web: http://bb.xnull.de/projects/mod_fastcgi_handler/
-:Source: http://git.xnull.de/cgit/mod_fastcgi_handler/ (also on `github <http://github.com/hollow/mod_fastcgi_handler>`_)
-:Download: http://bb.xnull.de/projects/mod_fastcgi_handler/dist/
+:Web: http://github.com/hollow/mod_fastcgi_handler
+:Git: ``git clone https://github.com/hollow/mod_fastcgi_handler.git``
+:Download: http://github.com/hollow/mod_fastcgi_handler/downloads
 
 mod_fastcgi_handler is a very simple FastCGI implementation derived from
 mod_fastcgi and mod_proxy_fcgi. mod_fastcgi_handler does not implement a
