@@ -32,7 +32,7 @@ ssize_t socket_recv(fcgi_request_t *fr, void *buf, size_t len)
 	ssize_t bytes_read;
 
 	do {
-		bytes_read = read(fr->socket_fd, buf, len);
+		bytes_read = recv(fr->socket_fd, buf, len, MSG_WAITALL);
 	} while (bytes_read == -1 && errno == EINTR);
 
 	if (bytes_read == -1) {
@@ -51,7 +51,7 @@ void socket_sink(fcgi_request_t *fr)
 
 	do {
 		do {
-			bytes_read = read(fr->socket_fd, buf, 1024);
+			bytes_read = recv(fr->socket_fd, buf, 1024, MSG_WAITALL);
 		} while (bytes_read == -1 && errno == EINTR);
 	} while (bytes_read > 0);
 }
