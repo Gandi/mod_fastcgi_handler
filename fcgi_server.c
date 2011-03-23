@@ -523,8 +523,7 @@ int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
 					}
 				}
 
-				/* content-length = 0 */
-				if (data && *data) {
+				if (data) {
 					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
 							"FastCGI: sending CGI data (id=%u, payload_len=%u)",
 							request_id, payload_len);
