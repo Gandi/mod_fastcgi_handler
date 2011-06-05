@@ -471,6 +471,9 @@ int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
 				"FastCGI: packet received (id=%u, type=%u, payload_len=%u)",
 				request_id, type, payload_len);
 
+		if (payload_len == 0)
+			continue;
+
 		/* Step 3: read FCGI payload */
 		bytes_read = socket_recv(fr, buffer, payload_len);
 
