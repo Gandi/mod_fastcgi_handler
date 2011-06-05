@@ -3,7 +3,7 @@ mod_fastcgi_handler
 ===================
 
 :Author: `Benedikt Böhm <bb@xnull.de>`_
-:Version: 0.5
+:Version: 0.6
 :Web: http://github.com/hollow/mod_fastcgi_handler
 :Git: ``git clone https://github.com/hollow/mod_fastcgi_handler.git``
 :Download: http://github.com/hollow/mod_fastcgi_handler/downloads
