@@ -424,6 +424,8 @@ int fcgi_server_parse_headers(fcgi_request_t *fr, uint16_t request_id,
 		 */
 		return HTTP_MOVED_TEMPORARILY;
 	}
+
+	return OK;
 }
 
 int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
