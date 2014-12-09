@@ -14,6 +14,11 @@
 #include "fcgi_record.h"
 #include "fcgi_server.h"
 
+struct memory {
+	char *ptr;
+	uint32_t length;
+};
+
 static
 ssize_t socket_send(fcgi_request_t *fr, void *buf, size_t len)
 {
@@ -349,16 +354,63 @@ int fcgi_server_send_stdout_data(fcgi_request_t *fr, uint16_t request_id,
 	return OK;
 }
 
+static int
+getsfunc_MEMORY(char *buffer, int len, void *arg)
+{
+	struct memory *m = (struct memory *) arg;
+	const char *c;
+	uint32_t line_len;
+
+	if (m->length == 0) {
+		buffer[0] = '\0';
+		return 0;
+	}
+	c = memchr(m->ptr, '\n', m->length);
+	if (c) {
+		c++; // we include \n in the line we return
+		line_len = c - m->ptr;
+	} else {
+		line_len = m->length;
+	}
+	if (line_len >= len) {
+		// >= and -1 because we need room for the final \0
+		line_len = len - 1;
+	}
+	memcpy(buffer, m->ptr, line_len);
+	buffer[line_len] = '\0';
+	m->ptr += line_len;
+	m->length -= line_len;
+	return line_len;
+}
+
+static int
+ap_scan_script_header_err_memory(request_rec *r,
+				 char *buffer,
+				 char **new,
+				 char *ptr,
+				 uint32_t length)
+{
+	struct memory m = {.ptr = ptr, .length = length};
+	int res;
+
+	res = ap_scan_script_header_err_core_ex(r, buffer, getsfunc_MEMORY,
+						(void *) &m, APLOG_MODULE_INDEX);
+	if (new)
+		*new = m.ptr;
+	return res;
+}
+
 /* copied from mod_cgi.c and slightly modified
  * to work with fcgi_record types */
 static
 int fcgi_server_parse_headers(fcgi_request_t *fr, uint16_t request_id,
-		char **data)
+		char **data, uint32_t payload_len)
 {
 	request_rec *r = fr->r;
-	int ret, termarg;
+	int ret;
 
-	if ((ret = ap_scan_script_header_err_strs(r, NULL, (const char **)data, &termarg, *data, NULL))) {
+	if ((ret = ap_scan_script_header_err_memory(r, NULL, data,
+						    *data, payload_len))) {
 		/*
 		 * ret could be HTTP_NOT_MODIFIED in the case that the CGI script
 		 * does not set an explicit status and ap_meets_conditions, which
@@ -514,7 +566,7 @@ int fcgi_server_recv_stdout_stderr_record(fcgi_request_t *fr,
 					 * should be fixed nevertheless. */
 
 					status = fcgi_server_parse_headers(fr, request_id,
-							&data);
+							&data, payload_len);
 
 					if (status != OK) {
 						ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, fr->r,
