@@ -9,6 +9,7 @@
 #include <http_log.h>
 
 #include "fcgi_header.h"
+#include "fcgi_server.h"
 #include "fcgi_request.h"
 
 #include "mod_fastcgi_handler.h"
