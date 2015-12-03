@@ -118,13 +118,13 @@ const char *fcgi_util_socket_make_addr(apr_pool_t *p, fcgi_request_t *fr)
 			&fr->socket_addr_len, host, port);
 }
 
-int fcgi_request_create(request_rec *r, fcgi_request_t **frP)
+int fcgi_request_create(request_rec *r, char *action, fcgi_request_t **frP)
 {
 	apr_pool_t *p = r->pool;
 	fcgi_request_t *fr = apr_pcalloc(p, sizeof(fcgi_request_t));
 
 	/* setup server socket struct */
-	fr->server = apr_pstrdup(p, r->handler + 5);
+	fr->server = apr_pstrdup(p, action);
 
 	const char *err = fcgi_util_socket_make_addr(p, fr);
 

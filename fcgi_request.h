@@ -17,7 +17,7 @@ typedef struct {
 	int socket_fd;                     /* socket descriptor to FastCGI server */
 } fcgi_request_t;
 
-int fcgi_request_create(request_rec *r, fcgi_request_t **frP);
+int fcgi_request_create(request_rec *r, char *action, fcgi_request_t **frP);
 
 int fcgi_request_process(fcgi_request_t *fr);
 
